@@ -35,7 +35,7 @@ export const api = {
   },
 
   getListing: (id: number) =>
-    fetch(`${URLS.listings}/listing/${id}`, { headers: authHeaders() }).then(r => r.json()),
+    fetch(`${URLS.listings}?id=${id}`, { headers: authHeaders() }).then(r => r.json()),
 
   createListing: (data: Record<string, unknown>) =>
     fetch(URLS.listings, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
