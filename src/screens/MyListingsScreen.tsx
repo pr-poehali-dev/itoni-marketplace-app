@@ -14,6 +14,8 @@ const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bb
 export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }: Props) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const user = getUser();
 
   useEffect(() => {
@@ -24,6 +26,16 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
       });
     }
   }, []);
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    const res = await api.deleteListing(id);
+    setDeletingId(null);
+    setConfirmId(null);
+    if (res.success) {
+      setListings(prev => prev.filter(l => l.id !== id));
+    }
+  }
 
   return (
     <div className="pb-nav bg-gray-50 min-h-screen">
@@ -41,7 +53,7 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
 
       <div className="px-4 py-4 space-y-3">
         {loading ? (
-          [1,2,3].map(i => <div key={i} className="bg-white rounded-2xl h-24 animate-pulse" />)
+          [1, 2, 3].map(i => <div key={i} className="bg-white rounded-2xl h-24 animate-pulse" />)
         ) : listings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-gray-400">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -55,35 +67,77 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
           </div>
         ) : (
           listings.map(l => (
-            <button
-              key={l.id}
-              onClick={() => onListingClick(l.id)}
-              className="w-full bg-white rounded-2xl p-3 card-shadow flex gap-3 active:scale-[0.99] transition-transform text-left"
-            >
-              <img
-                src={l.images?.[0] || PLACEHOLDER}
-                alt={l.title}
-                className="w-20 h-20 rounded-xl object-cover shrink-0"
-                onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm line-clamp-2 mb-1">{l.title}</p>
-                <p className="font-extrabold text-itoni-blue text-base">{formatPrice(l.price)}</p>
-                <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                  <Icon name="Eye" size={11} />
-                  <span>{l.views}</span>
-                  <span>·</span>
-                  <span>{formatDate(l.created_at)}</span>
-                </div>
+            <div key={l.id} className="bg-white rounded-2xl p-3 card-shadow">
+              <div className="flex gap-3">
+                <button onClick={() => onListingClick(l.id)} className="shrink-0">
+                  <img
+                    src={l.images?.[0] || PLACEHOLDER}
+                    alt={l.title}
+                    className="w-20 h-20 rounded-xl object-cover"
+                    onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
+                  />
+                </button>
+                <button onClick={() => onListingClick(l.id)} className="flex-1 min-w-0 text-left">
+                  <p className="font-semibold text-gray-900 text-sm line-clamp-2 mb-1">{l.title}</p>
+                  <p className="font-extrabold text-itoni-blue text-base">{formatPrice(l.price)}</p>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                    <Icon name="Eye" size={11} />
+                    <span>{l.views}</span>
+                    <span>·</span>
+                    <span>{formatDate(l.created_at)}</span>
+                  </div>
+                </button>
               </div>
-              <div className="flex flex-col items-center justify-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-[9px] text-green-600 font-medium">Активно</span>
+              <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+                <button
+                  onClick={() => onListingClick(l.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-gray-600 text-sm font-medium py-2 rounded-xl bg-gray-50 active:bg-gray-100"
+                >
+                  <Icon name="Eye" size={15} />
+                  Открыть
+                </button>
+                <button
+                  onClick={() => setConfirmId(l.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-red-500 text-sm font-medium py-2 rounded-xl bg-red-50 active:bg-red-100"
+                >
+                  <Icon name="Trash2" size={15} />
+                  Удалить
+                </button>
               </div>
-            </button>
+            </div>
           ))
         )}
       </div>
+
+      {/* Confirm delete modal */}
+      {confirmId !== null && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6" onClick={() => deletingId === null && setConfirmId(null)}>
+          <div className="absolute inset-0 bg-black/50 animate-fade-in" />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-sm animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Icon name="Trash2" size={26} className="text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 text-center mb-2">Удалить объявление?</h3>
+            <p className="text-sm text-gray-500 text-center mb-6">Объявление будет удалено без возможности восстановления.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmId(null)}
+                disabled={deletingId !== null}
+                className="flex-1 border border-gray-200 text-gray-600 font-bold py-3 rounded-xl"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => handleDelete(confirmId)}
+                disabled={deletingId !== null}
+                className="flex-1 bg-red-500 text-white font-bold py-3 rounded-xl disabled:opacity-60"
+              >
+                {deletingId !== null ? 'Удаление...' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

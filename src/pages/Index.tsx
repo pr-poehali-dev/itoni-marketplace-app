@@ -12,7 +12,10 @@ import ChatScreen from '@/screens/ChatScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import FavoritesScreen from '@/screens/FavoritesScreen';
 import MyListingsScreen from '@/screens/MyListingsScreen';
+import SecurityScreen from '@/screens/SecurityScreen';
+import SupportScreen from '@/screens/SupportScreen';
 import BottomNav, { Tab } from '@/components/BottomNav';
+import { clearUser } from '@/lib/auth';
 
 type Screen =
   | { name: 'home' }
@@ -23,7 +26,9 @@ type Screen =
   | { name: 'messages' }
   | { name: 'profile' }
   | { name: 'favorites' }
-  | { name: 'mylistings' };
+  | { name: 'mylistings' }
+  | { name: 'security' }
+  | { name: 'support' };
 
 const tabToScreen: Record<Tab, Screen> = {
   home: { name: 'home' },
@@ -109,7 +114,13 @@ export default function Index() {
     return <AuthScreen onAuth={() => setAuthed(true)} />;
   }
 
-  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings'].includes(screen.name);
+  function handleAccountGone() {
+    clearUser();
+    setAuthed(false);
+    setScreen({ name: 'home' });
+  }
+
+  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings', 'security', 'support'].includes(screen.name);
 
   return (
     <div className="max-w-lg mx-auto relative">
@@ -169,7 +180,21 @@ export default function Index() {
           onLogout={() => setAuthed(false)}
           onMyListings={() => navigate({ name: 'mylistings' })}
           onFavorites={() => navigate({ name: 'favorites' })}
+          onSecurity={() => navigate({ name: 'security' })}
+          onSupport={() => navigate({ name: 'support' })}
         />
+      )}
+
+      {screen.name === 'security' && (
+        <SecurityScreen
+          onBack={() => navigate({ name: 'profile' })}
+          onChangePhone={handleAccountGone}
+          onDeleted={handleAccountGone}
+        />
+      )}
+
+      {screen.name === 'support' && (
+        <SupportScreen onBack={() => navigate({ name: 'profile' })} />
       )}
 
       {screen.name === 'favorites' && (

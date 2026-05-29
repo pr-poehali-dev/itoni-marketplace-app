@@ -8,9 +8,11 @@ interface Props {
   onLogout: () => void;
   onMyListings: () => void;
   onFavorites: () => void;
+  onSecurity: () => void;
+  onSupport: () => void;
 }
 
-export default function ProfileScreen({ onLogout, onMyListings, onFavorites }: Props) {
+export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onSecurity, onSupport }: Props) {
   const [user, setUser] = useState(getUser());
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -123,12 +125,12 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites }: P
         {/* Settings */}
         <div className="bg-white rounded-2xl card-shadow overflow-hidden">
           {[
-            { icon: 'Bell', label: 'Уведомления', color: 'text-itoni-orange', bg: 'bg-itoni-orange-light' },
-            { icon: 'Shield', label: 'Безопасность', color: 'text-green-600', bg: 'bg-green-50' },
-            { icon: 'HelpCircle', label: 'Поддержка', color: 'text-purple-600', bg: 'bg-purple-50' },
+            { icon: 'Shield', label: 'Безопасность', color: 'text-green-600', bg: 'bg-green-50', action: onSecurity },
+            { icon: 'HelpCircle', label: 'Поддержка', color: 'text-purple-600', bg: 'bg-purple-50', action: onSupport },
           ].map((item, i) => (
             <button
               key={i}
+              onClick={item.action}
               className="w-full flex items-center gap-3 px-4 py-4 active:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
             >
               <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center`}>
@@ -149,7 +151,7 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites }: P
           Выйти из аккаунта
         </button>
 
-        <div className="text-center text-xs text-gray-400">ИТОНИ v1.0 · Маркетплейс техники</div>
+        <div className="text-center text-xs text-gray-400">иТони v1.0 · Маркетплейс техники</div>
       </div>
     </div>
   );

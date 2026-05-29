@@ -195,5 +195,30 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 201, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'id': new_id})}
 
+    # DELETE / - удалить своё объявление
+    if method == 'DELETE':
+        user_id = event.get('headers', {}).get('X-User-Id')
+        if not user_id:
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        listing_id = body.get('id') or (params.get('id') if params else None)
+        if not listing_id:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите id объявления'})}
+
+        cur.execute(
+            "DELETE FROM itoni_listings WHERE id=%s AND user_id=%s RETURNING id",
+            (int(listing_id), int(user_id))
+        )
+        deleted = cur.fetchone()
+        cur.execute("DELETE FROM itoni_favorites WHERE listing_id=%s", (int(listing_id),))
+        conn.commit()
+        cur.close(); conn.close()
+
+        if not deleted:
+            return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Объявление не найдено'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
     cur.close(); conn.close()
     return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Not found'})}

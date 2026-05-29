@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { saveUser } from '@/lib/auth';
+import TermsAcceptScreen from '@/screens/TermsAcceptScreen';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
 export default function AuthScreen({ onAuth }: Props) {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [step, setStep] = useState<'phone' | 'code' | 'terms'>('phone');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [demoCode, setDemoCode] = useState('');
@@ -66,7 +67,11 @@ export default function AuthScreen({ onAuth }: Props) {
       setLoading(false);
       if (res.success) {
         saveUser(res.user);
-        onAuth();
+        if (res.accepted_terms) {
+          onAuth();
+        } else {
+          setStep('terms');
+        }
       } else {
         setError(res.error || 'Неверный код');
       }
@@ -74,6 +79,10 @@ export default function AuthScreen({ onAuth }: Props) {
       setLoading(false);
       setError('Ошибка соединения. Попробуйте снова.');
     }
+  }
+
+  if (step === 'terms') {
+    return <TermsAcceptScreen onAccepted={onAuth} />;
   }
 
   return (

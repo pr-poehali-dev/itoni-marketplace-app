@@ -28,6 +28,18 @@ export const api = {
   updateProfile: (data: { name?: string; city?: string; region?: string; photo?: string }) =>
     fetch(URLS.auth, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
 
+  acceptTerms: () =>
+    fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'accept' }) }).then(r => r.json()),
+
+  deleteAccount: () =>
+    fetch(URLS.auth, { method: 'DELETE', headers: authHeaders() }).then(r => r.json()),
+
+  sendSupport: (data: { message: string; contact?: string; phone?: string }) =>
+    fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'support', ...data }) }).then(r => r.json()),
+
+  deleteListing: (id: number) =>
+    fetch(URLS.listings, { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ id }) }).then(r => r.json()),
+
   // Listings
   getListings: (params: Record<string, string | number> = {}) => {
     const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
@@ -95,6 +107,7 @@ export type User = {
   city?: string;
   region?: string;
   photo?: string;
+  accepted_terms?: boolean;
 };
 
 export type Message = {
