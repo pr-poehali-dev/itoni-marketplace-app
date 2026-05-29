@@ -1,0 +1,182 @@
+import json
+import os
+import psycopg2
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Auth-Token, X-Session-Id',
+    'Content-Type': 'application/json'
+}
+
+def get_conn():
+    return psycopg2.connect(os.environ['DATABASE_URL'])
+
+def listing_to_dict(row):
+    return {
+        'id': row[0],
+        'user_id': row[1],
+        'title': row[2],
+        'description': row[3],
+        'price': row[4],
+        'category': row[5],
+        'brand': row[6],
+        'model': row[7],
+        'year': row[8],
+        'mileage': row[9],
+        'fuel_type': row[10],
+        'transmission': row[11],
+        'city': row[12],
+        'region': row[13],
+        'images': list(row[14]) if row[14] else [],
+        'views': row[15],
+        'created_at': row[16].isoformat() if row[16] else None,
+        'seller_name': row[17],
+        'seller_phone': row[18],
+        'seller_photo': row[19]
+    }
+
+def handler(event: dict, context) -> dict:
+    """CRUD объявлений: получение, создание, обновление объявлений"""
+    if event.get('httpMethod') == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
+
+    path = event.get('path', '/')
+    method = event.get('httpMethod', 'GET')
+    params = event.get('queryStringParameters') or {}
+    body = {}
+    if event.get('body'):
+        body = json.loads(event['body'])
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # GET /listing/{id} - получить одно объявление
+    path_parts = [p for p in path.split('/') if p]
+    if method == 'GET' and len(path_parts) >= 2 and path_parts[-2] == 'listing':
+        listing_id = int(path_parts[-1])
+        cur.execute(
+            """SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
+               l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,
+               l.city, l.region, l.images, l.views, l.created_at,
+               u.name, u.phone, u.photo
+               FROM itoni_listings l
+               LEFT JOIN itoni_users u ON u.id = l.user_id
+               WHERE l.id=%s AND l.is_active=TRUE""",
+            (listing_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.close(); conn.close()
+            return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не найдено'})}
+
+        cur.execute("UPDATE itoni_listings SET views = views + 1 WHERE id=%s", (listing_id,))
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps(listing_to_dict(row))}
+
+    # GET / - список объявлений
+    if method == 'GET':
+        category = params.get('category')
+        search = params.get('search')
+        min_price = params.get('min_price')
+        max_price = params.get('max_price')
+        min_year = params.get('min_year')
+        max_year = params.get('max_year')
+        city = params.get('city')
+        user_id = params.get('user_id')
+        limit = int(params.get('limit', 20))
+        offset = int(params.get('offset', 0))
+
+        where = ["l.is_active=TRUE"]
+        args = []
+
+        if category:
+            where.append("l.category=%s"); args.append(category)
+        if search:
+            where.append("(l.title ILIKE %s OR l.brand ILIKE %s OR l.model ILIKE %s)")
+            args += [f'%{search}%', f'%{search}%', f'%{search}%']
+        if min_price:
+            where.append("l.price >= %s"); args.append(int(min_price))
+        if max_price:
+            where.append("l.price <= %s"); args.append(int(max_price))
+        if min_year:
+            where.append("l.year >= %s"); args.append(int(min_year))
+        if max_year:
+            where.append("l.year <= %s"); args.append(int(max_year))
+        if city:
+            where.append("l.city ILIKE %s"); args.append(f'%{city}%')
+        if user_id:
+            where.append("l.user_id=%s"); args.append(int(user_id))
+
+        where_clause = ' AND '.join(where)
+        args += [limit, offset]
+
+        cur.execute(
+            f"""SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
+               l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,
+               l.city, l.region, l.images, l.views, l.created_at,
+               u.name, u.phone, u.photo
+               FROM itoni_listings l
+               LEFT JOIN itoni_users u ON u.id = l.user_id
+               WHERE {where_clause}
+               ORDER BY l.created_at DESC
+               LIMIT %s OFFSET %s""",
+            args
+        )
+        rows = cur.fetchall()
+
+        cur.execute(f"SELECT COUNT(*) FROM itoni_listings l WHERE {where_clause}", args[:-2])
+        total = cur.fetchone()[0]
+
+        cur.close(); conn.close()
+        return {
+            'statusCode': 200,
+            'headers': CORS_HEADERS,
+            'body': json.dumps({'listings': [listing_to_dict(r) for r in rows], 'total': total})
+        }
+
+    # POST / - создать объявление
+    if method == 'POST':
+        user_id = event.get('headers', {}).get('X-User-Id')
+        if not user_id:
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        required = ['title', 'price', 'category']
+        for f in required:
+            if not body.get(f):
+                cur.close(); conn.close()
+                return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': f'Поле {f} обязательно'})}
+
+        images = body.get('images', [])
+
+        cur.execute(
+            """INSERT INTO itoni_listings
+               (user_id, title, description, price, category, brand, model, year, mileage,
+               fuel_type, transmission, city, region, images)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               RETURNING id""",
+            (
+                int(user_id),
+                body['title'],
+                body.get('description'),
+                int(body['price']),
+                body['category'],
+                body.get('brand'),
+                body.get('model'),
+                body.get('year'),
+                body.get('mileage'),
+                body.get('fuel_type'),
+                body.get('transmission'),
+                body.get('city'),
+                body.get('region'),
+                images if images else None
+            )
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 201, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'id': new_id})}
+
+    cur.close(); conn.close()
+    return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Not found'})}

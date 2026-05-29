@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Unauthorized upload",
+      "method": "POST",
+      "path": "/",
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS itoni_users (
+  id SERIAL PRIMARY KEY,
+  phone VARCHAR(20) UNIQUE NOT NULL,
+  name VARCHAR(100),
+  city VARCHAR(100),
+  region VARCHAR(100),
+  photo TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);

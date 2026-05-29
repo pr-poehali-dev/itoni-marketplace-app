@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS itoni_listings (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES itoni_users(id),
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  price BIGINT NOT NULL DEFAULT 0,
+  category VARCHAR(50) NOT NULL DEFAULT 'auto',
+  brand VARCHAR(100),
+  model VARCHAR(100),
+  year INTEGER,
+  mileage INTEGER,
+  fuel_type VARCHAR(50),
+  transmission VARCHAR(50),
+  city VARCHAR(100),
+  region VARCHAR(100),
+  images TEXT[],
+  views INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
