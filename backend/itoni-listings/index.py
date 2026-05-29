@@ -51,10 +51,9 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
-    # GET /listing/{id} - получить одно объявление
-    path_parts = [p for p in path.split('/') if p]
-    if method == 'GET' and len(path_parts) >= 2 and path_parts[-2] == 'listing':
-        listing_id = int(path_parts[-1])
+    # GET ?id={id} - получить одно объявление
+    if method == 'GET' and params.get('id'):
+        listing_id = int(params['id'])
         cur.execute(
             """SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
                l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,

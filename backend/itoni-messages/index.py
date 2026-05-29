@@ -32,8 +32,8 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
-    # GET /chats - список чатов пользователя
-    if method == 'GET' and path.endswith('/chats'):
+    # GET ?mode=chats - список чатов пользователя
+    if method == 'GET' and params.get('mode') == 'chats':
         cur.execute(
             """SELECT DISTINCT ON (
                 LEAST(m.sender_id, m.receiver_id),

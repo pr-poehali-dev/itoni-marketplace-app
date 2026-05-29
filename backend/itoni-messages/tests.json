@@ -3,7 +3,7 @@
     {
       "name": "Unauthorized access",
       "method": "GET",
-      "path": "/chats",
+      "path": "/?mode=chats",
       "expectedStatus": 401,
       "expectedBody": {"error": "Не авторизован"},
       "bodyMatcher": "partial"

@@ -20,17 +20,17 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    path = event.get('path', '/')
     method = event.get('httpMethod', 'GET')
     body = {}
     if event.get('body'):
         body = json.loads(event['body'])
+    action = body.get('action', '')
 
     conn = get_conn()
     cur = conn.cursor()
 
-    # POST /send - отправить SMS код
-    if method == 'POST' and path.endswith('/send'):
+    # POST send - отправить SMS код
+    if method == 'POST' and action == 'send':
         phone = body.get('phone', '').strip()
         if not phone:
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите номер телефона'})}
@@ -54,8 +54,8 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'success': True, 'demo_code': code, 'message': f'Код отправлен на {phone}'})
         }
 
-    # POST /verify - проверить код и войти
-    if method == 'POST' and path.endswith('/verify'):
+    # POST verify - проверить код и войти
+    if method == 'POST' and action == 'verify':
         phone = body.get('phone', '').strip()
         code = body.get('code', '').strip()
 

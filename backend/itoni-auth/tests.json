@@ -3,8 +3,8 @@
     {
       "name": "Send SMS code",
       "method": "POST",
-      "path": "/send",
-      "body": {"phone": "+79001234567"},
+      "path": "/",
+      "body": {"action": "send", "phone": "+79001234567"},
       "expectedStatus": 200,
       "expectedBody": {"success": true},
       "bodyMatcher": "partial"

@@ -20,10 +20,10 @@ function authHeaders(): Record<string, string> {
 export const api = {
   // Auth
   sendCode: (phone: string) =>
-    fetch(`${URLS.auth}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }).then(r => r.json()),
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', phone }) }).then(r => r.json()),
 
   verifyCode: (phone: string, code: string) =>
-    fetch(`${URLS.auth}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) }).then(r => r.json()),
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'verify', phone, code }) }).then(r => r.json()),
 
   updateProfile: (data: { name?: string; city?: string; region?: string; photo?: string }) =>
     fetch(URLS.auth, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
