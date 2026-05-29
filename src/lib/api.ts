@@ -42,7 +42,7 @@ export const api = {
 
   // Messages
   getChats: () =>
-    fetch(`${URLS.messages}/chats`, { headers: authHeaders() }).then(r => r.json()),
+    fetch(`${URLS.messages}?mode=chats`, { headers: authHeaders() }).then(r => r.json()),
 
   getMessages: (otherId: number, listingId: number) =>
     fetch(`${URLS.messages}?other_id=${otherId}&listing_id=${listingId}`, { headers: authHeaders() }).then(r => r.json()),

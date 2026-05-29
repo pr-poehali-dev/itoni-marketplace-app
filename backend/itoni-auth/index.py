@@ -22,8 +22,12 @@ def handler(event: dict, context) -> dict:
 
     method = event.get('httpMethod', 'GET')
     body = {}
-    if event.get('body'):
-        body = json.loads(event['body'])
+    raw_body = event.get('body')
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except (ValueError, TypeError):
+            body = {}
     action = body.get('action', '')
 
     conn = get_conn()
