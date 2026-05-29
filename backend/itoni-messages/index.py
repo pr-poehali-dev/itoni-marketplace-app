@@ -17,12 +17,15 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    path = event.get('path', '/')
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
     body = {}
-    if event.get('body'):
-        body = json.loads(event['body'])
+    raw_body = event.get('body')
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except (ValueError, TypeError):
+            body = {}
 
     user_id = event.get('headers', {}).get('X-User-Id')
     if not user_id:

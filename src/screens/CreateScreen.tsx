@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, CATEGORIES, FUEL_TYPES, TRANSMISSIONS } from '@/lib/api';
+import RegionPicker from '@/components/RegionPicker';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -217,15 +218,14 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Город</label>
-                <input value={form.city} onChange={e => set('city', e.target.value)} placeholder="Москва" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Регион</label>
-                <input value={form.region} onChange={e => set('region', e.target.value)} placeholder="Московская обл." className={inputCls} />
-              </div>
+            <div>
+              <label className={labelCls}>Регион и город</label>
+              <RegionPicker
+                region={form.region}
+                city={form.city}
+                onChange={(r, c) => setForm(f => ({ ...f, region: r, city: c }))}
+                label={false}
+              />
             </div>
 
             <div>

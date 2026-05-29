@@ -35,10 +35,10 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
       <div className="bg-white px-4 pt-12 pb-4 sticky top-0 z-10 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-xl font-extrabold text-gray-900">ИТОНИ</h1>
+            <h1 className="text-xl font-extrabold text-itoni-blue">иТони</h1>
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <Icon name="MapPin" size={11} />
-              <span>{user?.city || 'Россия'}</span>
+              <span>{user?.city || user?.region || 'Россия'}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">

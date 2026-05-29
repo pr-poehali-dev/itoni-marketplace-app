@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { getUser, saveUser, clearUser } from '@/lib/auth';
+import RegionPicker from '@/components/RegionPicker';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -79,16 +80,11 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites }: P
                 <label className="block text-xs font-medium text-gray-600 mb-1">Имя</label>
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="Введите имя" className={inputCls} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Город</label>
-                  <input value={city} onChange={e => setCity(e.target.value)} placeholder="Москва" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Регион</label>
-                  <input value={region} onChange={e => setRegion(e.target.value)} placeholder="Московская обл." className={inputCls} />
-                </div>
-              </div>
+              <RegionPicker
+                region={region}
+                city={city}
+                onChange={(r, c) => { setRegion(r); setCity(c); }}
+              />
               <button
                 onClick={handleSave}
                 disabled={loading}

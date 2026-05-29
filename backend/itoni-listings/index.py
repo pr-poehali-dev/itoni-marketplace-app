@@ -41,12 +41,15 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    path = event.get('path', '/')
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
     body = {}
-    if event.get('body'):
-        body = json.loads(event['body'])
+    raw_body = event.get('body')
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except (ValueError, TypeError):
+            body = {}
 
     conn = get_conn()
     cur = conn.cursor()
@@ -83,6 +86,11 @@ def handler(event: dict, context) -> dict:
         min_year = params.get('min_year')
         max_year = params.get('max_year')
         city = params.get('city')
+        region = params.get('region')
+        fuel_type = params.get('fuel_type')
+        transmission = params.get('transmission')
+        min_mileage = params.get('min_mileage')
+        max_mileage = params.get('max_mileage')
         user_id = params.get('user_id')
         limit = int(params.get('limit', 20))
         offset = int(params.get('offset', 0))
@@ -103,8 +111,18 @@ def handler(event: dict, context) -> dict:
             where.append("l.year >= %s"); args.append(int(min_year))
         if max_year:
             where.append("l.year <= %s"); args.append(int(max_year))
+        if min_mileage:
+            where.append("l.mileage >= %s"); args.append(int(min_mileage))
+        if max_mileage:
+            where.append("l.mileage <= %s"); args.append(int(max_mileage))
+        if fuel_type:
+            where.append("l.fuel_type=%s"); args.append(fuel_type)
+        if transmission:
+            where.append("l.transmission=%s"); args.append(transmission)
         if city:
-            where.append("l.city ILIKE %s"); args.append(f'%{city}%')
+            where.append("l.city=%s"); args.append(city)
+        if region:
+            where.append("l.region=%s"); args.append(region)
         if user_id:
             where.append("l.user_id=%s"); args.append(int(user_id))
 

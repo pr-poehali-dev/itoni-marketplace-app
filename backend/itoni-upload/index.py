@@ -21,8 +21,12 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
 
     body = {}
-    if event.get('body'):
-        body = json.loads(event['body'])
+    raw_body = event.get('body')
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except (ValueError, TypeError):
+            body = {}
 
     image_data = body.get('image')
     content_type = body.get('content_type', 'image/jpeg')

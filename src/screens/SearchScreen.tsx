@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { api, Listing, CATEGORIES } from '@/lib/api';
+import { api, Listing, CATEGORIES, FUEL_TYPES, TRANSMISSIONS } from '@/lib/api';
 import ListingCard from '@/components/ListingCard';
+import RegionPicker from '@/components/RegionPicker';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -20,6 +21,20 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minYear, setMinYear] = useState('');
+  const [minMileage, setMinMileage] = useState('');
+  const [maxMileage, setMaxMileage] = useState('');
+  const [fuelType, setFuelType] = useState('');
+  const [transmission, setTransmission] = useState('');
+  const [region, setRegion] = useState('');
+  const [city, setCity] = useState('');
+
+  const activeFiltersCount = [minPrice, maxPrice, minYear, minMileage, maxMileage, fuelType, transmission, region, city].filter(Boolean).length;
+
+  function resetFilters() {
+    setMinPrice(''); setMaxPrice(''); setMinYear('');
+    setMinMileage(''); setMaxMileage(''); setFuelType('');
+    setTransmission(''); setRegion(''); setCity('');
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,11 +44,17 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
     if (minPrice) params.min_price = minPrice;
     if (maxPrice) params.max_price = maxPrice;
     if (minYear) params.min_year = minYear;
+    if (minMileage) params.min_mileage = minMileage;
+    if (maxMileage) params.max_mileage = maxMileage;
+    if (fuelType) params.fuel_type = fuelType;
+    if (transmission) params.transmission = transmission;
+    if (region) params.region = region;
+    if (city) params.city = city;
     const res = await api.getListings(params);
     setListings(res.listings || []);
     setTotal(res.total || 0);
     setLoading(false);
-  }, [search, category, minPrice, maxPrice, minYear]);
+  }, [search, category, minPrice, maxPrice, minYear, minMileage, maxMileage, fuelType, transmission, region, city]);
 
   useEffect(() => {
     if (initialCategory) setCategory(initialCategory);
@@ -66,9 +87,14 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center ${showFilters ? 'bg-itoni-blue text-white' : 'bg-gray-100 text-gray-600'}`}
+            className={`relative w-10 h-10 rounded-xl flex items-center justify-center ${showFilters || activeFiltersCount > 0 ? 'bg-itoni-blue text-white' : 'bg-gray-100 text-gray-600'}`}
           >
             <Icon name="SlidersHorizontal" size={18} />
+            {activeFiltersCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-itoni-orange text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -94,26 +120,79 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-white px-4 py-4 border-b border-gray-100 animate-slide-up">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 font-medium mb-1 block">Цена от</label>
-              <input type="number" value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="0 ₽" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 font-medium mb-1 block">Цена до</label>
-              <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="∞ ₽" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 font-medium mb-1 block">Год от</label>
-              <input type="number" value={minYear} onChange={e => setMinYear(e.target.value)} placeholder="2000" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
-            </div>
-            <div className="flex items-end">
-              <button onClick={() => { setMinPrice(''); setMaxPrice(''); setMinYear(''); }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-500">
-                Сбросить
-              </button>
+        <div className="bg-white px-4 py-4 border-b border-gray-100 animate-slide-up space-y-4">
+          {/* Price */}
+          <div>
+            <label className="text-xs text-gray-500 font-medium mb-1.5 block">Цена, ₽</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="от" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
+              <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="до" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
             </div>
           </div>
+
+          {/* Year + Mileage */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 font-medium mb-1.5 block">Год от</label>
+              <input type="number" value={minYear} onChange={e => setMinYear(e.target.value)} placeholder="2000" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 font-medium mb-1.5 block">Пробег, км</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="number" value={minMileage} onChange={e => setMinMileage(e.target.value)} placeholder="от" className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
+                <input type="number" value={maxMileage} onChange={e => setMaxMileage(e.target.value)} placeholder="до" className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-itoni-blue" />
+              </div>
+            </div>
+          </div>
+
+          {/* Fuel type */}
+          <div>
+            <label className="text-xs text-gray-500 font-medium mb-1.5 block">Тип топлива</label>
+            <div className="flex flex-wrap gap-2">
+              {FUEL_TYPES.map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFuelType(fuelType === f ? '' : f)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${fuelType === f ? 'bg-itoni-blue text-white border-itoni-blue' : 'border-gray-200 text-gray-600'}`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Transmission */}
+          <div>
+            <label className="text-xs text-gray-500 font-medium mb-1.5 block">Коробка передач</label>
+            <div className="flex flex-wrap gap-2">
+              {TRANSMISSIONS.map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTransmission(transmission === t ? '' : t)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${transmission === t ? 'bg-itoni-blue text-white border-itoni-blue' : 'border-gray-200 text-gray-600'}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Region / City */}
+          <div>
+            <label className="text-xs text-gray-500 font-medium mb-1.5 block">Регион и город</label>
+            <RegionPicker
+              region={region}
+              city={city}
+              onChange={(r, c) => { setRegion(r); setCity(c); }}
+              label={false}
+            />
+          </div>
+
+          {activeFiltersCount > 0 && (
+            <button onClick={resetFilters} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-500 font-medium">
+              Сбросить фильтры ({activeFiltersCount})
+            </button>
+          )}
         </div>
       )}
 
