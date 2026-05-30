@@ -1,0 +1,1 @@
+UPDATE itoni_users SET accepted_terms = FALSE, accepted_at = NULL;
