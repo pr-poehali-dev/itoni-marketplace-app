@@ -170,6 +170,12 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите получателя, объявление и текст'})}
 
+        cur.execute("SELECT is_blocked FROM itoni_users WHERE id=%s", (user_id,))
+        urow = cur.fetchone()
+        if urow and urow[0]:
+            cur.close(); conn.close()
+            return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Ваш аккаунт заблокирован администратором'})}
+
         cur.execute(
             "INSERT INTO itoni_messages (sender_id, receiver_id, listing_id, text) VALUES (%s,%s,%s,%s) RETURNING id, created_at",
             (user_id, int(receiver_id), int(listing_id), text)

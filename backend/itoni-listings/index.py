@@ -118,6 +118,10 @@ def handler(event: dict, context) -> dict:
         where = ["l.is_active=TRUE"]
         args = []
 
+        # В общей ленте скрываем отклонённые модерацией; в "Мои объявления" (user_id) показываем все
+        if not user_id:
+            where.append("COALESCE(l.status,'active') = 'active'")
+
         if category:
             where.append("l.category=%s"); args.append(category)
         if search:
@@ -197,6 +201,12 @@ def handler(event: dict, context) -> dict:
         user_id = event.get('headers', {}).get('X-User-Id')
         if not user_id:
             return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        cur.execute("SELECT is_blocked FROM itoni_users WHERE id=%s", (int(user_id),))
+        urow = cur.fetchone()
+        if urow and urow[0]:
+            cur.close(); conn.close()
+            return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Ваш аккаунт заблокирован администратором'})}
 
         required = ['title', 'price', 'category']
         for f in required:

@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 from datetime import datetime, timedelta
 import psycopg2
+from admin import handle_admin
 
 SUPPORT_EMAIL = 'muratdzaurov@mail.ru'
 
@@ -37,6 +38,41 @@ def handler(event: dict, context) -> dict:
 
     conn = get_conn()
     cur = conn.cursor()
+
+    # Админ-панель (action начинается с admin_)
+    if action.startswith('admin_'):
+        try:
+            return handle_admin(action, event, body, conn, cur)
+        finally:
+            cur.close(); conn.close()
+
+    # Публичный: записать установку приложения
+    if method == 'POST' and action == 'track_install':
+        user_id = event.get('headers', {}).get('X-User-Id')
+        cur.execute(
+            "INSERT INTO itoni_installs (user_id, device_info, city, region) VALUES (%s,%s,%s,%s)",
+            (int(user_id) if user_id else None, body.get('device_info'), body.get('city'), body.get('region'))
+        )
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
+    # Публичный: активные баннеры
+    if action == 'get_banners':
+        cur.execute("SELECT id, title, image_url, link_url FROM itoni_banners WHERE is_active=TRUE ORDER BY position ASC, id DESC")
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        banners = [{'id': r[0], 'title': r[1], 'image_url': r[2], 'link_url': r[3]} for r in rows]
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'banners': banners})}
+
+    # Публичный: тексты главной и активные категории
+    if action == 'get_home':
+        cur.execute("SELECT section, content FROM itoni_home_content WHERE is_active=TRUE")
+        content = {r[0]: r[1] for r in cur.fetchall()}
+        cur.execute("SELECT slug, name, icon FROM itoni_categories WHERE is_active=TRUE ORDER BY sort_order ASC, id ASC")
+        cats = [{'id': r[0], 'label': r[1], 'emoji': r[2]} for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'content': content, 'categories': cats})}
 
     # POST send - отправить SMS код
     if method == 'POST' and action == 'send':

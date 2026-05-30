@@ -17,9 +17,12 @@ import SecurityScreen from '@/screens/SecurityScreen';
 import SupportScreen from '@/screens/SupportScreen';
 import NotificationSettingsScreen from '@/screens/NotificationSettingsScreen';
 import NotificationsScreen from '@/screens/NotificationsScreen';
+import AdminLoginScreen from '@/screens/AdminLoginScreen';
+import AdminPanelScreen from '@/screens/AdminPanelScreen';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import MessageToast, { ToastData } from '@/components/MessageToast';
 import { clearUser } from '@/lib/auth';
+import { getAdminToken } from '@/lib/adminApi';
 
 type Screen =
   | { name: 'home' }
@@ -34,7 +37,9 @@ type Screen =
   | { name: 'security' }
   | { name: 'support' }
   | { name: 'notification-settings' }
-  | { name: 'notifications' };
+  | { name: 'notifications' }
+  | { name: 'admin-login' }
+  | { name: 'admin-panel' };
 
 const tabToScreen: Record<Tab, Screen> = {
   home: { name: 'home' },
@@ -63,6 +68,17 @@ export default function Index() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const lastNotifId = useRef<number | null>(null);
   const firstNotifLoad = useRef(true);
+
+  // Запись установки приложения один раз
+  useEffect(() => {
+    if (localStorage.getItem('itoni_install_tracked')) return;
+    const u = getUser();
+    api.trackInstall({
+      device_info: navigator.userAgent,
+      city: u?.city,
+      region: u?.region,
+    }).then(() => localStorage.setItem('itoni_install_tracked', '1')).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!authed) return;
@@ -164,7 +180,7 @@ export default function Index() {
     setScreen({ name: 'home' });
   }
 
-  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications'].includes(screen.name);
+  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications', 'admin-login', 'admin-panel'].includes(screen.name);
 
   function handleNotifChat(n: Notification) {
     navigate({
@@ -238,6 +254,21 @@ export default function Index() {
           onSecurity={() => navigate({ name: 'security' })}
           onSupport={() => navigate({ name: 'support' })}
           onNotificationSettings={() => navigate({ name: 'notification-settings' })}
+          onAdmin={() => navigate({ name: getAdminToken() ? 'admin-panel' : 'admin-login' })}
+        />
+      )}
+
+      {screen.name === 'admin-login' && (
+        <AdminLoginScreen
+          onBack={() => navigate({ name: 'profile' })}
+          onSuccess={() => navigate({ name: 'admin-panel' })}
+        />
+      )}
+
+      {screen.name === 'admin-panel' && (
+        <AdminPanelScreen
+          onExit={() => navigate({ name: 'profile' })}
+          onOpenListing={handleListingClick}
         />
       )}
 

@@ -14,10 +14,14 @@ interface Props {
   onFavoriteToggle: (id: number) => void;
 }
 
+type Banner = { id: number; title?: string; image_url?: string; link_url?: string };
+
 export default function HomeScreen({ onListingClick, onCategorySelect, onSearch, onNotifications, notifUnread, favorites, onFavoriteToggle }: Props) {
   const [newListings, setNewListings] = useState<Listing[]>([]);
   const [popularListings, setPopularListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [homeText, setHomeText] = useState<Record<string, string>>({});
   const user = getUser();
 
   useEffect(() => {
@@ -29,6 +33,8 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
       setPopularListings(popRes.listings || []);
       setLoading(false);
     });
+    api.getBanners().then(res => setBanners(res.banners || []));
+    api.getHome().then(res => setHomeText(res.content || {}));
   }, []);
 
   return (
@@ -68,14 +74,31 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
         {/* Banner */}
         <div className="bg-itoni-blue rounded-2xl p-5 text-white relative overflow-hidden">
           <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-20 text-8xl">🚗</div>
-          <p className="text-xs font-medium opacity-80 mb-1">Маркетплейс техники</p>
-          <h2 className="text-xl font-extrabold mb-3">Продай или купи<br />за пару минут</h2>
+          <p className="text-xs font-medium opacity-80 mb-1">{homeText.promo || 'Маркетплейс техники'}</p>
+          <h2 className="text-xl font-extrabold mb-3">{homeText.greeting || 'Продай или купи за пару минут'}</h2>
           <div className="flex gap-2">
             <button onClick={() => onCategorySelect('auto')} className="bg-white text-itoni-blue text-sm font-bold px-4 py-2 rounded-xl">
               Купить
             </button>
           </div>
         </div>
+
+        {/* Ad banners from admin */}
+        {banners.map(b => (
+          <a
+            key={b.id}
+            href={b.link_url || '#'}
+            target={b.link_url ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            className="block rounded-2xl overflow-hidden card-shadow"
+          >
+            {b.image_url ? (
+              <img src={b.image_url} alt={b.title || ''} className="w-full h-32 object-cover" />
+            ) : (
+              <div className="bg-itoni-orange-light p-4 text-center font-bold text-itoni-orange">{b.title}</div>
+            )}
+          </a>
+        ))}
 
         {/* Categories */}
         <div>

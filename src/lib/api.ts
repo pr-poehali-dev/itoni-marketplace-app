@@ -86,7 +86,19 @@ export const api = {
   // Upload
   uploadImage: (base64: string, contentType = 'image/jpeg') =>
     fetch(URLS.upload, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ image: base64, content_type: contentType }) }).then(r => r.json()),
+
+  // Public: install tracking, banners, home content
+  trackInstall: (data: { device_info?: string; city?: string; region?: string }) =>
+    fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'track_install', ...data }) }).then(r => r.json()),
+
+  getBanners: () =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_banners' }) }).then(r => r.json()),
+
+  getHome: () =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_home' }) }).then(r => r.json()),
 };
+
+export const AUTH_URL = URLS.auth;
 
 export type Listing = {
   id: number;
