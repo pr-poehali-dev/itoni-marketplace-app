@@ -23,6 +23,7 @@ import BottomNav, { Tab } from '@/components/BottomNav';
 import MessageToast, { ToastData } from '@/components/MessageToast';
 import { clearUser } from '@/lib/auth';
 import { getAdminToken } from '@/lib/adminApi';
+import { applyTheme, getTheme } from '@/lib/theme';
 
 type Screen =
   | { name: 'home' }
@@ -68,6 +69,11 @@ export default function Index() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const lastNotifId = useRef<number | null>(null);
   const firstNotifLoad = useRef(true);
+
+  // Применить сохранённую тему при старте
+  useEffect(() => {
+    applyTheme(getTheme());
+  }, []);
 
   // Запись установки приложения один раз
   useEffect(() => {
@@ -171,7 +177,28 @@ export default function Index() {
   }
 
   if (!authed) {
-    return <AuthScreen onAuth={() => setAuthed(true)} />;
+    if (screen.name === 'admin-login') {
+      return (
+        <AdminLoginScreen
+          onBack={() => setScreen({ name: 'home' })}
+          onSuccess={() => setScreen({ name: 'admin-panel' })}
+        />
+      );
+    }
+    if (screen.name === 'admin-panel' && getAdminToken()) {
+      return (
+        <AdminPanelScreen
+          onExit={() => setScreen({ name: 'home' })}
+          onOpenListing={(id) => setScreen({ name: 'listing', id })}
+        />
+      );
+    }
+    return (
+      <AuthScreen
+        onAuth={() => setAuthed(true)}
+        onAdmin={() => setScreen({ name: getAdminToken() ? 'admin-panel' : 'admin-login' })}
+      />
+    );
   }
 
   function handleAccountGone() {

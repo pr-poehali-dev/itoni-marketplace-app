@@ -3,6 +3,7 @@ import { api, Listing, CATEGORIES, formatPrice } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import ListingCard from '@/components/ListingCard';
 import Icon from '@/components/ui/icon';
+import { getTheme, toggleTheme } from '@/lib/theme';
 
 interface Props {
   onListingClick: (id: number) => void;
@@ -22,6 +23,7 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
   const [loading, setLoading] = useState(true);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [homeText, setHomeText] = useState<Record<string, string>>({});
+  const [theme, setTheme] = useState(getTheme());
   const user = getUser();
 
   useEffect(() => {
@@ -50,6 +52,9 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => setTheme(toggleTheme())} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+              <Icon name={theme === 'dark' ? 'Sun' : 'Moon'} size={18} className="text-gray-600" />
+            </button>
             <button onClick={onNotifications} className="relative w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
               <Icon name="Bell" size={18} className="text-gray-600" />
               {notifUnread > 0 && (
