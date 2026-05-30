@@ -1,5 +1,7 @@
 {
   "itoni-auth": "https://functions.poehali.dev/ef33d28f-af7b-409d-abbe-a48c5e7fee33",
+  "itoni-favorites": "https://functions.poehali.dev/8a1695ea-2018-4b8b-ac83-74db930b9582",
   "itoni-messages": "https://functions.poehali.dev/2f5c87db-e9c8-4cfb-b254-c9af129d3f60",
-  "itoni-listings": "https://functions.poehali.dev/0deef765-3164-4e05-869b-78d8f921093a"
+  "itoni-listings": "https://functions.poehali.dev/0deef765-3164-4e05-869b-78d8f921093a",
+  "itoni-upload": "https://functions.poehali.dev/676c8ac5-82ee-46c2-b2e9-14337d9550f3"
 }

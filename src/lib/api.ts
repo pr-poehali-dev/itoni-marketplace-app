@@ -62,6 +62,12 @@ export const api = {
   sendMessage: (receiverId: number, listingId: number, text: string) =>
     fetch(URLS.messages, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ receiver_id: receiverId, listing_id: listingId, text }) }).then(r => r.json()),
 
+  deleteMessage: (messageId: number) =>
+    fetch(URLS.messages, { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ message_id: messageId }) }).then(r => r.json()),
+
+  deleteChat: (otherId: number, listingId: number) =>
+    fetch(URLS.messages, { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ other_id: otherId, listing_id: listingId }) }).then(r => r.json()),
+
   // Notifications
   getNotifications: () =>
     fetch(`${URLS.messages}?mode=notifications`, { headers: authHeaders() }).then(r => r.json()),

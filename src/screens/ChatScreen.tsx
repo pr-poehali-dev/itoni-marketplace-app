@@ -10,18 +10,35 @@ interface Props {
   listingImage?: string;
   otherName?: string;
   onBack: () => void;
+  onOpenSeller?: (name?: string, photo?: string, phone?: string) => void;
+  onChatDeleted?: () => void;
 }
 
 const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
 
-export default function ChatScreen({ otherId, listingId, listingTitle, listingImage, otherName, onBack }: Props) {
+export default function ChatScreen({ otherId, listingId, listingTitle, listingImage, otherName, onBack, onOpenSeller, onChatDeleted }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState<{ name?: string; photo?: string; phone?: string } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [actionMsg, setActionMsg] = useState<Message | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const user = getUser();
+
+  async function handleDeleteChat() {
+    setMenuOpen(false);
+    if (!confirm('Удалить весь чат? Это действие необратимо.')) return;
+    await api.deleteChat(otherId, listingId);
+    onChatDeleted?.();
+  }
+
+  async function handleDeleteMessage(msg: Message) {
+    setActionMsg(null);
+    setMessages(prev => prev.filter(m => m.id !== msg.id));
+    await api.deleteMessage(msg.id);
+  }
 
   const loadMessages = async () => {
     const res = await api.getMessages(otherId, listingId);
@@ -68,19 +85,43 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
       {/* Header */}
       <div className="bg-white px-4 pt-12 pb-3 border-b border-gray-100 shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+          <button onClick={onBack} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
             <Icon name="ChevronLeft" size={20} className="text-gray-600" />
           </button>
-          <div className="w-10 h-10 rounded-full bg-itoni-blue-light flex items-center justify-center overflow-hidden">
-            {otherUser?.photo ? (
-              <img src={otherUser.photo} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <Icon name="User" size={18} className="text-itoni-blue" />
+          <button
+            onClick={() => onOpenSeller?.(displayName, otherUser?.photo, otherUser?.phone)}
+            className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-70"
+          >
+            <div className="w-10 h-10 rounded-full bg-itoni-blue-light flex items-center justify-center overflow-hidden shrink-0">
+              {otherUser?.photo ? (
+                <img src={otherUser.photo} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Icon name="User" size={18} className="text-itoni-blue" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 truncate flex items-center gap-1">
+                {displayName}
+                <Icon name="ChevronRight" size={14} className="text-gray-400 shrink-0" />
+              </p>
+              <p className="text-xs text-gray-500 truncate">{listingTitle}</p>
+            </div>
+          </button>
+          <div className="relative shrink-0">
+            <button onClick={() => setMenuOpen(v => !v)} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+              <Icon name="MoreVertical" size={18} className="text-gray-600" />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-11 z-30 bg-white rounded-xl card-shadow border border-gray-100 overflow-hidden min-w-[180px]">
+                  <button onClick={handleDeleteChat} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-500 active:bg-gray-50">
+                    <Icon name="Trash2" size={16} />
+                    Удалить чат
+                  </button>
+                </div>
+              </>
             )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 truncate">{displayName}</p>
-            <p className="text-xs text-gray-500 truncate">{listingTitle}</p>
           </div>
         </div>
 
@@ -116,11 +157,14 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
                   </div>
                 )}
                 <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
-                  <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    isMe
-                      ? 'bg-itoni-blue text-white rounded-br-sm'
-                      : 'bg-white text-gray-900 card-shadow rounded-bl-sm'
-                  }`}>
+                  <div
+                    onClick={() => isMe && setActionMsg(msg)}
+                    className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${isMe ? 'cursor-pointer' : ''} ${
+                      isMe
+                        ? 'bg-itoni-blue text-white rounded-br-sm'
+                        : 'bg-white text-gray-900 card-shadow rounded-bl-sm'
+                    }`}
+                  >
                     {msg.text}
                   </div>
                   <span className="text-[10px] text-gray-400 px-1">{formatDate(msg.created_at)}</span>
@@ -154,6 +198,26 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
           </button>
         </div>
       </div>
+
+      {/* Delete message sheet */}
+      {actionMsg && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center" onClick={() => setActionMsg(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-lg p-4 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-gray-50 rounded-xl px-4 py-3 mb-3 text-sm text-gray-600 line-clamp-2">{actionMsg.text}</div>
+            <button
+              onClick={() => handleDeleteMessage(actionMsg)}
+              className="w-full flex items-center justify-center gap-2 text-red-500 font-semibold py-3.5 rounded-2xl bg-red-50 active:scale-[0.98] transition-transform"
+            >
+              <Icon name="Trash2" size={18} />
+              Удалить сообщение
+            </button>
+            <button onClick={() => setActionMsg(null)} className="w-full text-gray-500 font-medium py-3 mt-1">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

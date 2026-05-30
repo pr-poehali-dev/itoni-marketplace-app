@@ -10,6 +10,7 @@ import CreateScreen from '@/screens/CreateScreen';
 import ListingScreen from '@/screens/ListingScreen';
 import MessagesScreen from '@/screens/MessagesScreen';
 import ChatScreen from '@/screens/ChatScreen';
+import SellerScreen from '@/screens/SellerScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import FavoritesScreen from '@/screens/FavoritesScreen';
 import MyListingsScreen from '@/screens/MyListingsScreen';
@@ -31,6 +32,7 @@ type Screen =
   | { name: 'create' }
   | { name: 'listing'; id: number }
   | { name: 'chat'; otherId: number; listingId: number; listingTitle: string; listingImage?: string; otherName?: string }
+  | { name: 'seller'; sellerId: number; sellerName?: string; sellerPhoto?: string; sellerPhone?: string }
   | { name: 'messages' }
   | { name: 'profile' }
   | { name: 'favorites' }
@@ -165,6 +167,10 @@ export default function Index() {
     });
   }
 
+  function handleSeller(sellerId: number, sellerName?: string, sellerPhoto?: string, sellerPhone?: string) {
+    navigate({ name: 'seller', sellerId, sellerName, sellerPhoto, sellerPhone });
+  }
+
   function handleChatOpen(chat: Chat) {
     navigate({
       name: 'chat',
@@ -207,7 +213,7 @@ export default function Index() {
     setScreen({ name: 'home' });
   }
 
-  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications', 'admin-login', 'admin-panel'].includes(screen.name);
+  const showBottomNav = !['listing', 'chat', 'seller', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications', 'admin-login', 'admin-panel'].includes(screen.name);
 
   function handleNotifChat(n: Notification) {
     navigate({
@@ -270,6 +276,22 @@ export default function Index() {
           listingImage={screen.listingImage}
           otherName={screen.otherName}
           onBack={() => navigate({ name: 'messages' })}
+          onOpenSeller={(name, photo, phone) => handleSeller(screen.otherId, name, photo, phone)}
+          onChatDeleted={() => navigate({ name: 'messages' })}
+        />
+      )}
+
+      {screen.name === 'seller' && (
+        <SellerScreen
+          sellerId={screen.sellerId}
+          sellerName={screen.sellerName}
+          sellerPhoto={screen.sellerPhoto}
+          sellerPhone={screen.sellerPhone}
+          onBack={() => window.history.length > 1 ? navigate({ name: 'home' }) : navigate({ name: 'home' })}
+          onListingClick={handleListingClick}
+          onChat={handleChat}
+          favorites={favorites}
+          onFavoriteToggle={handleFavoriteToggle}
         />
       )}
 

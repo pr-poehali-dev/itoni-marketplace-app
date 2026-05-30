@@ -204,5 +204,36 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'success': True, 'id': row[0], 'created_at': row[1].isoformat()})
         }
 
+    # DELETE / - удалить сообщение или весь чат
+    if method == 'DELETE':
+        message_id = body.get('message_id')
+        other_id = body.get('other_id')
+        listing_id = body.get('listing_id')
+
+        if message_id:
+            cur.execute(
+                "DELETE FROM itoni_messages WHERE id=%s AND (sender_id=%s OR receiver_id=%s)",
+                (int(message_id), user_id, user_id)
+            )
+            conn.commit()
+            cur.close(); conn.close()
+            return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
+        if other_id and listing_id:
+            cur.execute(
+                """DELETE FROM itoni_messages
+                   WHERE listing_id=%s AND (
+                     (sender_id=%s AND receiver_id=%s) OR
+                     (sender_id=%s AND receiver_id=%s)
+                   )""",
+                (int(listing_id), user_id, int(other_id), int(other_id), user_id)
+            )
+            conn.commit()
+            cur.close(); conn.close()
+            return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
+        cur.close(); conn.close()
+        return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите message_id или other_id+listing_id'})}
+
     cur.close(); conn.close()
     return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Not found'})}
