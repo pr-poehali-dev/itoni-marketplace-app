@@ -44,9 +44,18 @@ const tabToScreen: Record<Tab, Screen> = {
   profile: { name: 'profile' },
 };
 
+function getInitialScreen(): Screen {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  if (window.location.pathname === '/listing' && id && !isNaN(Number(id))) {
+    return { name: 'listing', id: Number(id) };
+  }
+  return { name: 'home' };
+}
+
 export default function Index() {
   const [authed, setAuthed] = useState(!!getUser());
-  const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  const [screen, setScreen] = useState<Screen>(getInitialScreen);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [favorites, setFavorites] = useState<number[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);

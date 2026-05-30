@@ -19,6 +19,9 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
   const [loading, setLoading] = useState(true);
   const [imgIndex, setImgIndex] = useState(0);
   const [showReport, setShowReport] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [shareError, setShareError] = useState('');
   const user = getUser();
 
   useEffect(() => {
@@ -27,6 +30,51 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
       setLoading(false);
     });
   }, [listingId]);
+
+  function buildShareUrl(): string {
+    const origin = window.location.origin;
+    return `${origin}/listing?id=${listingId}`;
+  }
+
+  async function handleShare() {
+    setShareError('');
+    if (!listing) {
+      setShareError('Не удалось поделиться, попробуйте позже');
+      return;
+    }
+    const url = buildShareUrl();
+    const parts: string[] = [`Цена: ${formatPrice(listing.price)}.`];
+    const yearMileage: string[] = [];
+    if (listing.year) yearMileage.push(`${listing.year} г.`);
+    if (listing.mileage) yearMileage.push(`${new Intl.NumberFormat('ru-RU').format(listing.mileage)} км`);
+    if (yearMileage.length) parts.push(yearMileage.join(', ') + '.');
+    parts.push('Смотри на иТони!');
+    const text = parts.join(' ');
+    const title = `${listing.title} — иТони`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+      }
+    }
+    // Фолбэк: попап со ссылкой
+    setShareUrl(url);
+    setCopied(false);
+  }
+
+  async function copyShareLink() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setShareError('Не удалось скопировать');
+    }
+  }
 
   if (loading) return (
     <div className="min-h-screen bg-white flex items-center justify-center">
@@ -173,16 +221,35 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
           </div>
         </div>
 
-        {/* Report */}
-        {!isOwner && (
+        {/* Actions: favorite / share / report */}
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => onFavoriteToggle(listing.id)}
+            className={`flex flex-col items-center justify-center gap-1 py-3 rounded-2xl card-shadow bg-white active:scale-[0.97] transition-all ${isFav ? 'text-red-500' : 'text-gray-500'}`}
+          >
+            <Icon name="Heart" size={20} className={isFav ? 'fill-red-500' : ''} />
+            <span className="text-xs font-medium">{isFav ? 'В избранном' : 'В избранное'}</span>
+          </button>
+
+          <button
+            onClick={handleShare}
+            className="flex flex-col items-center justify-center gap-1 py-3 rounded-2xl card-shadow bg-white text-itoni-blue active:scale-[0.97] transition-all"
+          >
+            <Icon name="Share2" size={20} />
+            <span className="text-xs font-medium">Поделиться</span>
+          </button>
+
           <button
             onClick={() => setShowReport(true)}
-            className="w-full flex items-center justify-center gap-2 text-gray-400 text-sm py-2"
+            disabled={isOwner}
+            className="flex flex-col items-center justify-center gap-1 py-3 rounded-2xl card-shadow bg-white text-gray-500 active:scale-[0.97] transition-all disabled:opacity-40"
           >
-            <Icon name="Flag" size={15} />
-            Пожаловаться на объявление
+            <Icon name="Flag" size={20} />
+            <span className="text-xs font-medium">Пожаловаться</span>
           </button>
-        )}
+        </div>
+
+        {shareError && <p className="text-red-500 text-sm text-center">{shareError}</p>}
 
         {/* Spacing for bottom buttons */}
         <div className="h-4" />
@@ -209,6 +276,32 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
       )}
 
       {showReport && <ReportModal listingId={listing.id} onClose={() => setShowReport(false)} />}
+
+      {/* Share fallback popup */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6" onClick={() => setShareUrl(null)}>
+          <div className="absolute inset-0 bg-black/50 animate-fade-in" />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-sm animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-gray-900">Поделиться</h3>
+              <button onClick={() => setShareUrl(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                <Icon name="X" size={16} className="text-gray-600" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">Скопируйте ссылку на объявление:</p>
+            <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2.5 mb-4">
+              <p className="text-sm text-gray-700 truncate flex-1">{shareUrl}</p>
+            </div>
+            <button
+              onClick={copyShareLink}
+              className="w-full bg-itoni-blue text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
+            >
+              <Icon name={copied ? 'Check' : 'Copy'} size={18} />
+              {copied ? 'Скопировано!' : 'Скопировать ссылку'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
