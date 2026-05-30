@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getUser } from '@/lib/auth';
-import { api, Listing, Chat } from '@/lib/api';
+import { api, Listing, Chat, Notification } from '@/lib/api';
+import { getNotificationSettings } from '@/lib/settings';
 
 import AuthScreen from '@/screens/AuthScreen';
 import HomeScreen from '@/screens/HomeScreen';
@@ -14,7 +15,10 @@ import FavoritesScreen from '@/screens/FavoritesScreen';
 import MyListingsScreen from '@/screens/MyListingsScreen';
 import SecurityScreen from '@/screens/SecurityScreen';
 import SupportScreen from '@/screens/SupportScreen';
+import NotificationSettingsScreen from '@/screens/NotificationSettingsScreen';
+import NotificationsScreen from '@/screens/NotificationsScreen';
 import BottomNav, { Tab } from '@/components/BottomNav';
+import MessageToast, { ToastData } from '@/components/MessageToast';
 import { clearUser } from '@/lib/auth';
 
 type Screen =
@@ -28,7 +32,9 @@ type Screen =
   | { name: 'favorites' }
   | { name: 'mylistings' }
   | { name: 'security' }
-  | { name: 'support' };
+  | { name: 'support' }
+  | { name: 'notification-settings' }
+  | { name: 'notifications' };
 
 const tabToScreen: Record<Tab, Screen> = {
   home: { name: 'home' },
@@ -44,19 +50,48 @@ export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [favorites, setFavorites] = useState<number[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifUnread, setNotifUnread] = useState(0);
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const lastNotifId = useRef<number | null>(null);
+  const firstNotifLoad = useRef(true);
 
   useEffect(() => {
     if (!authed) return;
     api.getFavorites().then(res => {
       if (res.favorites) setFavorites(res.favorites.map((f: { id: number }) => Number(f.id)));
     });
-    const loadUnread = () => {
+
+    const poll = () => {
       api.getChats().then(res => {
         if (res.chats) setUnreadCount(res.chats.filter((c: { is_read: boolean }) => !c.is_read).length);
       });
+      api.getNotifications().then(res => {
+        const notes: Notification[] = res.notifications || [];
+        setNotifUnread(res.unread || 0);
+
+        // Детекция новых уведомлений для тоста о сообщениях
+        const newest = notes[0];
+        if (newest) {
+          if (firstNotifLoad.current) {
+            lastNotifId.current = newest.id;
+            firstNotifLoad.current = false;
+          } else if (lastNotifId.current !== null && newest.id > lastNotifId.current) {
+            const fresh = notes.filter(n => n.id > (lastNotifId.current as number));
+            const msgNote = fresh.find(n => n.type === 'message');
+            const settings = getNotificationSettings();
+            if (msgNote && settings.messages) {
+              setToast({
+                senderName: msgNote.title.replace('Новое сообщение от ', '') || 'Пользователь',
+                listingTitle: (msgNote.body || '').replace('В чате по объявлению «', '').replace('»', '') || 'объявление',
+              });
+            }
+            lastNotifId.current = newest.id;
+          }
+        }
+      });
     };
-    loadUnread();
-    const interval = setInterval(loadUnread, 15000);
+    poll();
+    const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
   }, [authed]);
 
@@ -120,7 +155,16 @@ export default function Index() {
     setScreen({ name: 'home' });
   }
 
-  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings', 'security', 'support'].includes(screen.name);
+  const showBottomNav = !['listing', 'chat', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications'].includes(screen.name);
+
+  function handleNotifChat(n: Notification) {
+    navigate({
+      name: 'chat',
+      otherId: n.sender_id || 0,
+      listingId: n.listing_id || 0,
+      listingTitle: (n.body || '').replace('В чате по объявлению «', '').replace('»', '') || 'Объявление',
+    });
+  }
 
   return (
     <div className="max-w-lg mx-auto relative">
@@ -129,6 +173,8 @@ export default function Index() {
           onListingClick={handleListingClick}
           onCategorySelect={cat => navigate({ name: 'search', category: cat })}
           onSearch={() => navigate({ name: 'search' })}
+          onNotifications={() => navigate({ name: 'notifications' })}
+          notifUnread={notifUnread}
           favorites={favorites}
           onFavoriteToggle={handleFavoriteToggle}
         />
@@ -182,6 +228,20 @@ export default function Index() {
           onFavorites={() => navigate({ name: 'favorites' })}
           onSecurity={() => navigate({ name: 'security' })}
           onSupport={() => navigate({ name: 'support' })}
+          onNotificationSettings={() => navigate({ name: 'notification-settings' })}
+        />
+      )}
+
+      {screen.name === 'notification-settings' && (
+        <NotificationSettingsScreen onBack={() => navigate({ name: 'profile' })} />
+      )}
+
+      {screen.name === 'notifications' && (
+        <NotificationsScreen
+          onBack={() => navigate({ name: 'home' })}
+          onOpenListing={handleListingClick}
+          onOpenChat={handleNotifChat}
+          onRead={() => setNotifUnread(0)}
         />
       )}
 
@@ -211,6 +271,14 @@ export default function Index() {
           onBack={() => navigate({ name: 'profile' })}
           onListingClick={handleListingClick}
           onCreateNew={() => navigate({ name: 'create' })}
+        />
+      )}
+
+      {toast && (
+        <MessageToast
+          toast={toast}
+          onClick={() => { setToast(null); navigate({ name: 'messages' }); }}
+          onClose={() => setToast(null)}
         />
       )}
 

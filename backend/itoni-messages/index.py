@@ -13,7 +13,7 @@ def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 def handler(event: dict, context) -> dict:
-    """Чат: получение и отправка сообщений между пользователями"""
+    """Чат и уведомления: сообщения между пользователями, лента уведомлений"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
@@ -72,6 +72,34 @@ def handler(event: dict, context) -> dict:
                 'listing_image': (list(r[10])[0] if r[10] else None)
             })
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'chats': chats})}
+
+    # GET ?mode=notifications - лента уведомлений пользователя
+    if method == 'GET' and params.get('mode') == 'notifications':
+        cur.execute(
+            """SELECT id, type, title, body, listing_id, sender_id, is_read, created_at
+               FROM itoni_notifications
+               WHERE user_id=%s
+               ORDER BY created_at DESC
+               LIMIT 100""",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        cur.execute("SELECT COUNT(*) FROM itoni_notifications WHERE user_id=%s AND is_read=FALSE", (user_id,))
+        unread = cur.fetchone()[0]
+        cur.close(); conn.close()
+        notes = [{
+            'id': r[0], 'type': r[1], 'title': r[2], 'body': r[3],
+            'listing_id': r[4], 'sender_id': r[5], 'is_read': r[6],
+            'created_at': r[7].isoformat() if r[7] else None
+        } for r in rows]
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'notifications': notes, 'unread': unread})}
+
+    # POST ?mode=read_notifications - пометить уведомления прочитанными
+    if method == 'POST' and params.get('mode') == 'read_notifications':
+        cur.execute("UPDATE itoni_notifications SET is_read=TRUE WHERE user_id=%s AND is_read=FALSE", (user_id,))
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
 
     # GET / - история переписки
     if method == 'GET':
@@ -147,6 +175,20 @@ def handler(event: dict, context) -> dict:
             (user_id, int(receiver_id), int(listing_id), text)
         )
         row = cur.fetchone()
+
+        # Создаём уведомление получателю о новом сообщении
+        cur.execute("SELECT name FROM itoni_users WHERE id=%s", (user_id,))
+        sender_row = cur.fetchone()
+        sender_name = (sender_row[0] if sender_row and sender_row[0] else 'Пользователь')
+        cur.execute("SELECT title FROM itoni_listings WHERE id=%s", (int(listing_id),))
+        lst_row = cur.fetchone()
+        lst_title = (lst_row[0] if lst_row else '')
+        cur.execute(
+            "INSERT INTO itoni_notifications (user_id, type, title, body, listing_id, sender_id) VALUES (%s,%s,%s,%s,%s,%s)",
+            (int(receiver_id), 'message', f'Новое сообщение от {sender_name}',
+             f'В чате по объявлению «{lst_title}»' if lst_title else 'Новое сообщение', int(listing_id), user_id)
+        )
+
         conn.commit()
         cur.close(); conn.close()
 

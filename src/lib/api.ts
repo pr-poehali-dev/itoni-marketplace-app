@@ -62,6 +62,17 @@ export const api = {
   sendMessage: (receiverId: number, listingId: number, text: string) =>
     fetch(URLS.messages, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ receiver_id: receiverId, listing_id: listingId, text }) }).then(r => r.json()),
 
+  // Notifications
+  getNotifications: () =>
+    fetch(`${URLS.messages}?mode=notifications`, { headers: authHeaders() }).then(r => r.json()),
+
+  markNotificationsRead: () =>
+    fetch(`${URLS.messages}?mode=read_notifications`, { method: 'POST', headers: authHeaders(), body: '{}' }).then(r => r.json()),
+
+  // Report
+  reportListing: (listingId: number, reason: string, comment?: string) =>
+    fetch(URLS.listings, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'report', listing_id: listingId, reason, comment }) }).then(r => r.json()),
+
   // Favorites
   getFavorites: () =>
     fetch(URLS.favorites, { headers: authHeaders() }).then(r => r.json()),
@@ -119,6 +130,17 @@ export type Message = {
   is_read: boolean;
   sender_name: string;
   sender_photo?: string;
+};
+
+export type Notification = {
+  id: number;
+  type: 'message' | 'view' | 'system';
+  title: string;
+  body?: string;
+  listing_id?: number;
+  sender_id?: number;
+  is_read: boolean;
+  created_at: string;
 };
 
 export type Chat = {

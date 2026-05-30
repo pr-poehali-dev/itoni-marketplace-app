@@ -8,11 +8,13 @@ interface Props {
   onListingClick: (id: number) => void;
   onCategorySelect: (cat: string) => void;
   onSearch: () => void;
+  onNotifications: () => void;
+  notifUnread: number;
   favorites: number[];
   onFavoriteToggle: (id: number) => void;
 }
 
-export default function HomeScreen({ onListingClick, onCategorySelect, onSearch, favorites, onFavoriteToggle }: Props) {
+export default function HomeScreen({ onListingClick, onCategorySelect, onSearch, onNotifications, notifUnread, favorites, onFavoriteToggle }: Props) {
   const [newListings, setNewListings] = useState<Listing[]>([]);
   const [popularListings, setPopularListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,8 +44,13 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+            <button onClick={onNotifications} className="relative w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
               <Icon name="Bell" size={18} className="text-gray-600" />
+              {notifUnread > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
+                  {notifUnread > 9 ? '9+' : notifUnread}
+                </span>
+              )}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, Listing, CATEGORIES, formatPrice, formatDate } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import ReportModal from '@/components/ReportModal';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -17,6 +18,7 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [imgIndex, setImgIndex] = useState(0);
+  const [showReport, setShowReport] = useState(false);
   const user = getUser();
 
   useEffect(() => {
@@ -171,6 +173,17 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
           </div>
         </div>
 
+        {/* Report */}
+        {!isOwner && (
+          <button
+            onClick={() => setShowReport(true)}
+            className="w-full flex items-center justify-center gap-2 text-gray-400 text-sm py-2"
+          >
+            <Icon name="Flag" size={15} />
+            Пожаловаться на объявление
+          </button>
+        )}
+
         {/* Spacing for bottom buttons */}
         <div className="h-4" />
       </div>
@@ -194,6 +207,8 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
           </button>
         </div>
       )}
+
+      {showReport && <ReportModal listingId={listing.id} onClose={() => setShowReport(false)} />}
     </div>
   );
 }

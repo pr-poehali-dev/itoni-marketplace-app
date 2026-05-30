@@ -73,6 +73,26 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не найдено'})}
 
         cur.execute("UPDATE itoni_listings SET views = views + 1 WHERE id=%s", (listing_id,))
+
+        # Уведомление владельцу о просмотре (не чаще 1 раза в час, не себе)
+        viewer_id = event.get('headers', {}).get('X-User-Id')
+        owner_id = row[1]
+        if viewer_id and int(viewer_id) != owner_id:
+            cur.execute(
+                """SELECT id FROM itoni_notifications
+                   WHERE user_id=%s AND type='view' AND listing_id=%s
+                   AND created_at > NOW() - INTERVAL '1 hour'
+                   LIMIT 1""",
+                (owner_id, listing_id)
+            )
+            recent = cur.fetchone()
+            if not recent:
+                cur.execute(
+                    "INSERT INTO itoni_notifications (user_id, type, title, body, listing_id) VALUES (%s,%s,%s,%s,%s)",
+                    (owner_id, 'view', 'Новый просмотр объявления',
+                     f'Ваше объявление «{row[2]}» просмотрели', listing_id)
+                )
+
         conn.commit()
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps(listing_to_dict(row))}
@@ -152,6 +172,25 @@ def handler(event: dict, context) -> dict:
             'headers': CORS_HEADERS,
             'body': json.dumps({'listings': [listing_to_dict(r) for r in rows], 'total': total})
         }
+
+    # POST ?action=report - пожаловаться на объявление
+    if method == 'POST' and body.get('action') == 'report':
+        user_id = event.get('headers', {}).get('X-User-Id')
+        if not user_id:
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+        listing_id = body.get('listing_id')
+        reason = (body.get('reason') or '').strip()
+        if not listing_id or not reason:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите объявление и причину'})}
+        cur.execute(
+            "INSERT INTO itoni_reports (user_id, listing_id, reason, comment) VALUES (%s,%s,%s,%s)",
+            (int(user_id), int(listing_id), reason, body.get('comment'))
+        )
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 201, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
 
     # POST / - создать объявление
     if method == 'POST':
