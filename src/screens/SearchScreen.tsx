@@ -18,6 +18,8 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Черновик фильтров — меняются пока пользователь выбирает
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minYear, setMinYear] = useState('');
@@ -28,12 +30,25 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
   const [region, setRegion] = useState('');
   const [city, setCity] = useState('');
 
-  const activeFiltersCount = [minPrice, maxPrice, minYear, minMileage, maxMileage, fuelType, transmission, region, city].filter(Boolean).length;
+  // Применённые фильтры — используются при запросе
+  const [applied, setApplied] = useState({
+    minPrice: '', maxPrice: '', minYear: '',
+    minMileage: '', maxMileage: '', fuelType: '',
+    transmission: '', region: '', city: ''
+  });
+
+  const activeFiltersCount = Object.values(applied).filter(Boolean).length;
+
+  function applyFilters() {
+    setApplied({ minPrice, maxPrice, minYear, minMileage, maxMileage, fuelType, transmission, region, city });
+    setShowFilters(false);
+  }
 
   function resetFilters() {
     setMinPrice(''); setMaxPrice(''); setMinYear('');
     setMinMileage(''); setMaxMileage(''); setFuelType('');
     setTransmission(''); setRegion(''); setCity('');
+    setApplied({ minPrice: '', maxPrice: '', minYear: '', minMileage: '', maxMileage: '', fuelType: '', transmission: '', region: '', city: '' });
   }
 
   const load = useCallback(async () => {
@@ -41,20 +56,20 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
     const params: Record<string, string | number> = { limit: 20 };
     if (search) params.search = search;
     if (category) params.category = category;
-    if (minPrice) params.min_price = minPrice;
-    if (maxPrice) params.max_price = maxPrice;
-    if (minYear) params.min_year = minYear;
-    if (minMileage) params.min_mileage = minMileage;
-    if (maxMileage) params.max_mileage = maxMileage;
-    if (fuelType) params.fuel_type = fuelType;
-    if (transmission) params.transmission = transmission;
-    if (region) params.region = region;
-    if (city) params.city = city;
+    if (applied.minPrice) params.min_price = applied.minPrice;
+    if (applied.maxPrice) params.max_price = applied.maxPrice;
+    if (applied.minYear) params.min_year = applied.minYear;
+    if (applied.minMileage) params.min_mileage = applied.minMileage;
+    if (applied.maxMileage) params.max_mileage = applied.maxMileage;
+    if (applied.fuelType) params.fuel_type = applied.fuelType;
+    if (applied.transmission) params.transmission = applied.transmission;
+    if (applied.region) params.region = applied.region;
+    if (applied.city) params.city = applied.city;
     const res = await api.getListings(params);
     setListings(res.listings || []);
     setTotal(res.total || 0);
     setLoading(false);
-  }, [search, category, minPrice, maxPrice, minYear, minMileage, maxMileage, fuelType, transmission, region, city]);
+  }, [search, category, applied]);
 
   useEffect(() => {
     if (initialCategory) setCategory(initialCategory);
@@ -188,11 +203,23 @@ export default function SearchScreen({ initialCategory, onListingClick, favorite
             />
           </div>
 
-          {activeFiltersCount > 0 && (
-            <button onClick={resetFilters} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-500 font-medium">
-              Сбросить фильтры ({activeFiltersCount})
+          <div className="flex gap-2 pt-1">
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={resetFilters}
+                className="flex-none border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-500 font-medium whitespace-nowrap"
+              >
+                Сбросить
+              </button>
+            )}
+            <button
+              onClick={applyFilters}
+              className="flex-1 bg-itoni-blue text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm"
+            >
+              <Icon name="Search" size={16} />
+              Найти
             </button>
-          )}
+          </div>
         </div>
       )}
 

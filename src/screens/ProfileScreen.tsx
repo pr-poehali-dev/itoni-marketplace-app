@@ -250,7 +250,6 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onS
           Выйти из аккаунта
         </button>
 
-        <div className="text-center text-xs text-gray-400">иТони v1.0 · Маркетплейс техники</div>
       </div>
     </div>
   );

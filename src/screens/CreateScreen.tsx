@@ -13,6 +13,7 @@ const STEPS = ['Фото', 'Основное', 'Детали', 'Публикац
 export default function CreateScreen({ onSuccess, onCancel }: Props) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [error, setError] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [form, setForm] = useState({
@@ -27,17 +28,29 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
   }
 
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    for (const file of files.slice(0, 10 - images.length)) {
-      const reader = new FileReader();
-      reader.onload = async ev => {
-        const base64 = (ev.target?.result as string);
-        const res = await api.uploadImage(base64, file.type);
-        if (res.url) setImages(prev => [...prev, res.url]);
-        else setImages(prev => [...prev, base64]);
-      };
-      reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []).slice(0, 10 - images.length);
+    if (!files.length) return;
+    e.target.value = '';
+    setUploadingPhotos(true);
+
+    const uploaded: string[] = [];
+    for (const file of files) {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(ev.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await api.uploadImage(base64, file.type);
+      if (res.url) {
+        uploaded.push(res.url);
+      }
     }
+
+    if (uploaded.length > 0) {
+      setImages(prev => [...prev, ...uploaded]);
+    }
+    setUploadingPhotos(false);
   }
 
   async function handlePublish() {
@@ -111,7 +124,13 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
                   {i === 0 && <div className="absolute bottom-1 left-1 bg-itoni-blue text-white text-[9px] px-1.5 py-0.5 rounded-md font-medium">Главное</div>}
                 </div>
               ))}
-              {images.length < 10 && (
+              {uploadingPhotos && (
+                <div className="aspect-square rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center">
+                  <Icon name="LoaderCircle" size={22} className="text-itoni-blue animate-spin mb-1" />
+                  <span className="text-xs text-gray-400">Загрузка...</span>
+                </div>
+              )}
+              {images.length < 10 && !uploadingPhotos && (
                 <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer active:bg-gray-50">
                   <Icon name="Camera" size={24} className="text-gray-300 mb-1" />
                   <span className="text-xs text-gray-400">Добавить</span>
@@ -119,8 +138,15 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
                 </label>
               )}
             </div>
-            <button onClick={() => setStep(1)} className="w-full bg-itoni-blue text-white font-bold py-4 rounded-xl">
-              Далее
+            {images.length > 0 && (
+              <p className="text-xs text-gray-400 text-center mb-3">Загружено {images.length} фото на сервер ✓</p>
+            )}
+            <button
+              onClick={() => setStep(1)}
+              disabled={uploadingPhotos}
+              className="w-full bg-itoni-blue text-white font-bold py-4 rounded-xl disabled:opacity-60"
+            >
+              {uploadingPhotos ? 'Загрузка фото...' : 'Далее'}
             </button>
           </div>
         )}
