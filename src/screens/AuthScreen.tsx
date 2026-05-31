@@ -6,10 +6,9 @@ import Icon from '@/components/ui/icon';
 
 interface Props {
   onAuth: () => void;
-  onAdmin: () => void;
 }
 
-export default function AuthScreen({ onAuth, onAdmin }: Props) {
+export default function AuthScreen({ onAuth }: Props) {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'phone' | 'code' | 'terms'>('phone');
@@ -88,15 +87,6 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
 
   return (
     <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-      {/* Admin button top-right */}
-      <button
-        onClick={onAdmin}
-        className="absolute top-12 right-4 z-20 flex items-center gap-1 bg-white/10 border border-white/15 text-gray-300 text-xs font-medium px-3 py-1.5 rounded-full active:scale-95 transition-transform"
-      >
-        <Icon name="ShieldCheck" size={13} />
-        Admin
-      </button>
-
       {/* Top: logo + car */}
       <div className="relative flex-1 flex flex-col items-center justify-center pt-14 px-6">
         {/* Logo */}

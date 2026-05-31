@@ -202,7 +202,6 @@ export default function Index() {
     return (
       <AuthScreen
         onAuth={() => setAuthed(true)}
-        onAdmin={() => setScreen({ name: getAdminToken() ? 'admin-panel' : 'admin-login' })}
       />
     );
   }
@@ -303,7 +302,6 @@ export default function Index() {
           onSecurity={() => navigate({ name: 'security' })}
           onSupport={() => navigate({ name: 'support' })}
           onNotificationSettings={() => navigate({ name: 'notification-settings' })}
-          onAdmin={() => navigate({ name: getAdminToken() ? 'admin-panel' : 'admin-login' })}
         />
       )}
 
@@ -343,7 +341,10 @@ export default function Index() {
       )}
 
       {screen.name === 'support' && (
-        <SupportScreen onBack={() => navigate({ name: 'profile' })} />
+        <SupportScreen
+          onBack={() => navigate({ name: 'profile' })}
+          onAdmin={() => navigate({ name: getAdminToken() ? 'admin-panel' : 'admin-login' })}
+        />
       )}
 
       {screen.name === 'favorites' && (
