@@ -1,35 +1,19 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import Icon from '@/components/ui/icon';
 
 interface Props {
   onBack: () => void;
-  onAdmin: () => void;
 }
 
-export default function SupportScreen({ onBack, onAdmin }: Props) {
+export default function SupportScreen({ onBack }: Props) {
   const user = getUser();
   const [message, setMessage] = useState('');
   const [contact, setContact] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressed = useRef(false);
-
-  function startPress() {
-    longPressed.current = false;
-    pressTimer.current = setTimeout(() => {
-      longPressed.current = true;
-      if (navigator.vibrate) navigator.vibrate(20);
-      onAdmin();
-    }, 1500);
-  }
-
-  function endPress() {
-    if (pressTimer.current) clearTimeout(pressTimer.current);
-  }
 
   async function handleSend() {
     if (!message.trim()) {
@@ -108,14 +92,9 @@ export default function SupportScreen({ onBack, onAdmin }: Props) {
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
           <button
-            onClick={() => { if (!longPressed.current) handleSend(); }}
-            onMouseDown={startPress}
-            onMouseUp={endPress}
-            onMouseLeave={endPress}
-            onTouchStart={startPress}
-            onTouchEnd={endPress}
+            onClick={handleSend}
             disabled={loading}
-            className="w-full bg-itoni-blue text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 flex items-center justify-center gap-2 select-none"
+            className="w-full bg-itoni-blue text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <Icon name="Send" size={18} />
             {loading ? 'Отправка...' : 'Отправить'}
