@@ -5,10 +5,9 @@ import Icon from '@/components/ui/icon';
 
 interface Props {
   onBack: () => void;
-  onAdmin: () => void;
 }
 
-export default function SupportScreen({ onBack, onAdmin }: Props) {
+export default function SupportScreen({ onBack }: Props) {
   const user = getUser();
   const [message, setMessage] = useState('');
   const [contact, setContact] = useState('');
@@ -91,14 +90,6 @@ export default function SupportScreen({ onBack, onAdmin }: Props) {
           </div>
 
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-
-          <button
-            onClick={onAdmin}
-            className="w-full bg-gray-100 text-gray-700 font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-          >
-            <Icon name="ShieldCheck" size={18} />
-            Админ
-          </button>
 
           <button
             onClick={handleSend}

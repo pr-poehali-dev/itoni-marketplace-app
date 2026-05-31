@@ -54,6 +54,9 @@ const tabToScreen: Record<Tab, Screen> = {
 
 function getInitialScreen(): Screen {
   const params = new URLSearchParams(window.location.search);
+  if (window.location.pathname === '/admin' || params.has('admin')) {
+    return getAdminToken() ? { name: 'admin-panel' } : { name: 'admin-login' };
+  }
   const id = params.get('id');
   if (window.location.pathname === '/listing' && id && !isNaN(Number(id))) {
     return { name: 'listing', id: Number(id) };
@@ -341,10 +344,7 @@ export default function Index() {
       )}
 
       {screen.name === 'support' && (
-        <SupportScreen
-          onBack={() => navigate({ name: 'profile' })}
-          onAdmin={() => navigate({ name: getAdminToken() ? 'admin-panel' : 'admin-login' })}
-        />
+        <SupportScreen onBack={() => navigate({ name: 'profile' })} />
       )}
 
       {screen.name === 'favorites' && (
