@@ -1,0 +1,31 @@
+{
+  "name": "иТони — маркетплейс авто и техники",
+  "short_name": "иТони",
+  "description": "Покупай и продавай автомобили, мото, лодки, спецтехнику и запчасти в России",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050b18",
+  "theme_color": "#2563EB",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/bucket/a495f360-6daf-4ed8-826d-7913c83b3188.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/bucket/a495f360-6daf-4ed8-826d-7913c83b3188.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/bucket/a495f360-6daf-4ed8-826d-7913c83b3188.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ]
+}
