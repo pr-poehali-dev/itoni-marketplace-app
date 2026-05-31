@@ -86,31 +86,49 @@ export default function AuthScreen({ onAuth }: Props) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #dfe9f5 0%, #0a1730 38%, #050b18 100%)' }}>
+    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
       {/* Top: logo + car */}
-      <div className="relative flex flex-col items-center pt-10 px-6">
-        <img
-          src="https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/bucket/67306b7b-933c-4658-80b9-0d829aab5240.jpg"
-          alt="иТони"
-          className="relative w-full max-w-md object-contain animate-scale-in"
-        />
+      <div className="relative flex-1 flex flex-col items-center justify-center pt-14 px-6">
+        {/* Logo */}
+        <div className="text-center z-10 animate-fade-in">
+          <div className="flex items-center justify-center">
+            <span className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-clip-text text-transparent" style={{ fontFamily: 'Golos Text' }}>
+              иТони
+            </span>
+          </div>
+          <div className="mx-auto mt-1 mb-1 w-40 h-[3px] rounded-full bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+          <p className="text-blue-300/80 text-sm font-medium tracking-wide">Продай быстро. Купи честно.</p>
+        </div>
+
+        {/* Car image with glow */}
+        <div className="relative w-full max-w-sm mt-2">
+          <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
+          <img
+            src="https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/3ac92b93-59b4-44c8-a735-c2fdfd95acdc.jpg"
+            alt="иТони"
+            className="relative w-full object-contain animate-scale-in"
+            style={{ maskImage: 'radial-gradient(ellipse at center, black 55%, transparent 80%)', WebkitMaskImage: 'radial-gradient(ellipse at center, black 55%, transparent 80%)' }}
+          />
+        </div>
       </div>
 
       {/* Bottom: form */}
-      <div className="relative z-10 px-6 pb-8 -mt-4">
+      <div className="relative z-10 px-6 pb-10">
         {step === 'phone' ? (
           <div className="animate-slide-up">
-            <label className="block text-white text-base font-medium mb-2.5 pl-1">Номер телефона</label>
-            <div className="mb-5">
-              <div className="flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-5 py-4 focus-within:border-blue-500 transition-colors">
-                <Icon name="Phone" size={22} className="text-blue-400" />
+            <h2 className="text-2xl font-bold text-white text-center mb-1">Вход по номеру телефона</h2>
+            <p className="text-gray-400 text-sm text-center mb-6">Мы отправим вам код подтверждения</p>
+
+            <div className="mb-4">
+              <div className="flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 focus-within:border-blue-500 transition-colors">
+                <Icon name="Phone" size={20} className="text-gray-400" />
                 <input
                   type="tel"
                   value={phone}
                   onChange={e => setPhone(formatPhone(e.target.value))}
                   onKeyDown={e => e.key === 'Enter' && handleSendCode()}
-                  placeholder="+7 (___) __-__-__"
-                  className="flex-1 bg-transparent text-xl text-white placeholder-gray-400 focus:outline-none"
+                  placeholder="+7 (___) ___-__-__"
+                  className="flex-1 bg-transparent text-lg text-white placeholder-gray-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -118,35 +136,10 @@ export default function AuthScreen({ onAuth }: Props) {
             <button
               onClick={handleSendCode}
               disabled={loading}
-              className="w-full flex items-center justify-between bg-gradient-to-r from-[#4ba3ff] to-[#1f6feb] text-white font-bold py-5 px-6 rounded-2xl text-lg disabled:opacity-60 transition-all active:scale-[0.98] shadow-[0_0_40px_rgba(59,130,246,0.5)]"
+              className="w-full bg-itoni-blue text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/30"
             >
-              <span className="flex-1 text-center">{loading ? 'Отправка...' : 'Получить код'}</span>
-              <span className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center">
-                <Icon name="ArrowRight" size={22} className="text-white" />
-              </span>
+              {loading ? 'Отправка...' : 'Получить код'}
             </button>
-
-            {/* Divider */}
-            <div className="flex items-center justify-center gap-3 my-6">
-              <div className="flex-1 h-px bg-white/15" />
-              <div className="w-20 h-4 rounded bg-black/40" />
-              <div className="flex-1 h-px bg-white/15" />
-            </div>
-
-            {/* Trust features */}
-            <div className="grid grid-cols-3 bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-              {[
-                { icon: 'ShieldCheck', title: 'Безопасно', sub: 'Проверяем\nкаждого' },
-                { icon: 'Zap', title: 'Быстро', sub: 'Размещай\nи продавай' },
-                { icon: 'BadgeCheck', title: 'Честно', sub: 'Реальные цены\nи продавцы' },
-              ].map((f, i) => (
-                <div key={f.title} className={`py-5 px-2 text-center ${i < 2 ? 'border-r border-white/10' : ''}`}>
-                  <Icon name={f.icon} size={26} className="text-blue-400 mx-auto mb-2" />
-                  <p className="text-white font-bold text-sm">{f.title}</p>
-                  <p className="text-gray-400 text-[11px] leading-tight mt-1 whitespace-pre-line">{f.sub}</p>
-                </div>
-              ))}
-            </div>
           </div>
         ) : (
           <div className="animate-slide-up">
@@ -182,9 +175,8 @@ export default function AuthScreen({ onAuth }: Props) {
           </div>
         )}
 
-        <p className="text-center text-sm text-gray-400 mt-6">
-          Нажимая «Войти», вы принимаете условия<br />
-          <span className="text-blue-400 font-medium">пользовательского соглашения</span>
+        <p className="text-center text-xs text-gray-500 mt-5">
+          Нажимая «Войти», вы принимаете условия использования
         </p>
       </div>
     </div>
