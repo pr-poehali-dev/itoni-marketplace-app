@@ -44,7 +44,7 @@ def handle_admin(action, event, body, conn, cur):
     # Вход в админку
     if action == 'admin_login':
         email = (body.get('email') or '').strip().lower()
-        password = body.get('password') or ''
+        password = (body.get('password') or '').strip()
         if email == ADMIN_EMAIL.lower() and password == ADMIN_PASSWORD:
             _log(cur, 'Вход в админ-панель')
             conn.commit()

@@ -10,6 +10,7 @@ interface Props {
 export default function AdminLoginScreen({ onBack, onSuccess }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,7 +21,7 @@ export default function AdminLoginScreen({ onBack, onSuccess }: Props) {
     }
     setLoading(true);
     setError('');
-    const res = await adminApi.login(email, password);
+    const res = await adminApi.login(email.trim(), password.trim());
     setLoading(false);
     if (res.success && res.token) {
       setAdminToken(res.token);
@@ -53,16 +54,31 @@ export default function AdminLoginScreen({ onBack, onSuccess }: Props) {
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="Email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-itoni-blue"
           />
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            placeholder="Пароль"
-            className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-itoni-blue"
-          />
+          <div className="relative">
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              placeholder="Пароль"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-itoni-blue"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+            >
+              <Icon name={showPw ? 'EyeOff' : 'Eye'} size={18} />
+            </button>
+          </div>
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           <button
             onClick={handleLogin}
