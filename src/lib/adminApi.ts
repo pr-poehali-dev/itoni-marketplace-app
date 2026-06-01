@@ -27,18 +27,21 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
       headers,
       body: JSON.stringify({ action, admin_token: token, ...payload }),
     });
-    if (r.status === 403 && action !== 'admin_login') {
-      clearAdminToken();
-      window.dispatchEvent(new Event('admin-access-denied'));
-      return { error: 'Сессия устарела. Войдите снова.' };
-    }
     const text = await r.text();
+    let data: Record<string, unknown>;
     try {
-      return JSON.parse(text);
+      data = JSON.parse(text);
     } catch {
       console.error('[adminApi] not JSON:', action, r.status, text);
       return { error: `Ошибка сервера (${r.status})` };
     }
+    const denied = r.status === 403 || data?.error === 'Доступ запрещён';
+    if (denied && action !== 'admin_login') {
+      clearAdminToken();
+      window.dispatchEvent(new Event('admin-access-denied'));
+      return { error: 'Сессия устарела. Войдите снова.' };
+    }
+    return data;
   } catch (e) {
     console.error('[adminApi] network error:', action, e);
     return { error: 'Нет связи с сервером' };

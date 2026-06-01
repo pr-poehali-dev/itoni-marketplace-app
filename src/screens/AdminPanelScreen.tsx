@@ -37,10 +37,15 @@ const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
 
 export default function AdminPanelScreen({ onExit, onOpenListing }: Props) {
   const [section, setSection] = useState<SectionId>('stats');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   function logout() {
     clearAdminToken();
     onExit();
+  }
+
+  function refresh() {
+    setRefreshKey(k => k + 1);
   }
 
   useEffect(() => {
@@ -58,9 +63,14 @@ export default function AdminPanelScreen({ onExit, onOpenListing }: Props) {
             <Icon name="ShieldCheck" size={20} className="text-white" />
             <h1 className="text-lg font-extrabold text-white">Админ-панель</h1>
           </div>
-          <button onClick={logout} className="text-xs text-gray-300 flex items-center gap-1">
-            <Icon name="LogOut" size={14} /> Выйти
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={refresh} className="text-xs text-gray-300 flex items-center gap-1">
+              <Icon name="RefreshCw" size={14} /> Обновить
+            </button>
+            <button onClick={logout} className="text-xs text-gray-300 flex items-center gap-1">
+              <Icon name="LogOut" size={14} /> Выйти
+            </button>
+          </div>
         </div>
         {/* Section tabs */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
@@ -77,7 +87,7 @@ export default function AdminPanelScreen({ onExit, onOpenListing }: Props) {
         </div>
       </div>
 
-      <div className="px-4 py-4">
+      <div className="px-4 py-4" key={`${section}-${refreshKey}`}>
         {section === 'stats' && <AdminStats />}
         {section === 'users' && <AdminUsers />}
         {section === 'listings' && <AdminListings onOpenListing={onOpenListing} />}
