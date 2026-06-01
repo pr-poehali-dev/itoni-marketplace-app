@@ -33,7 +33,8 @@ def listing_to_dict(row):
         'created_at': row[16].isoformat() if row[16] else None,
         'seller_name': row[17],
         'seller_phone': row[18],
-        'seller_photo': row[19]
+        'seller_photo': row[19],
+        'seller_show_phone': bool(row[20]) if len(row) > 20 and row[20] is not None else True
     }
 
 def handler(event: dict, context) -> dict:
@@ -61,7 +62,7 @@ def handler(event: dict, context) -> dict:
             """SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
                l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,
                l.city, l.region, l.images, l.views, l.created_at,
-               u.name, u.phone, u.photo
+               u.name, u.phone, u.photo, u.show_phone
                FROM itoni_listings l
                LEFT JOIN itoni_users u ON u.id = l.user_id
                WHERE l.id=%s AND l.is_active=TRUE""",
@@ -157,7 +158,7 @@ def handler(event: dict, context) -> dict:
             f"""SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
                l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,
                l.city, l.region, l.images, l.views, l.created_at,
-               u.name, u.phone, u.photo
+               u.name, u.phone, u.photo, u.show_phone
                FROM itoni_listings l
                LEFT JOIN itoni_users u ON u.id = l.user_id
                WHERE {where_clause}

@@ -35,6 +35,24 @@
       "expectedStatus": 400,
       "expectedBody": {"error": "string"},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "SMS send invalid phone",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "sms_send", "phone": "123"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "SMS verify wrong code",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "sms_verify", "phone": "+79991234567", "code": "0000"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
     }
   ]
 }

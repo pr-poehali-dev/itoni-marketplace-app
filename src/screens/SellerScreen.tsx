@@ -23,7 +23,8 @@ export default function SellerScreen({
   const [loading, setLoading] = useState(true);
 
   const name = sellerName || 'Продавец';
-  const phone = listings[0]?.seller_phone || sellerPhone;
+  const showPhone = listings[0] ? listings[0].seller_show_phone !== false : true;
+  const phone = showPhone ? (listings[0]?.seller_phone || sellerPhone) : undefined;
   const photo = listings[0]?.seller_photo || sellerPhoto;
 
   useEffect(() => {

@@ -22,6 +22,7 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shareError, setShareError] = useState('');
+  const [phoneShown, setPhoneShown] = useState(false);
   const user = getUser();
 
   useEffect(() => {
@@ -214,11 +215,25 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
                 <Icon name="User" size={22} className="text-itoni-blue" />
               )}
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-semibold text-gray-900">{listing.seller_name || 'Пользователь'}</p>
-              <p className="text-xs text-gray-500">{listing.seller_phone}</p>
+              {phoneShown && listing.seller_show_phone !== false ? (
+                <a href={`tel:${listing.seller_phone}`} className="text-sm font-semibold text-itoni-blue">{listing.seller_phone}</a>
+              ) : (
+                <p className="text-xs text-gray-500">Номер скрыт</p>
+              )}
             </div>
           </div>
+
+          {!isOwner && listing.seller_show_phone !== false && !phoneShown && (
+            <button
+              onClick={() => setPhoneShown(true)}
+              className="mt-3 w-full flex items-center justify-center gap-2 border border-itoni-blue text-itoni-blue font-semibold py-2.5 rounded-xl active:scale-[0.98] transition-all"
+            >
+              <Icon name="Eye" size={16} />
+              Показать номер
+            </button>
+          )}
         </div>
 
         {/* Actions: favorite / share / report */}
@@ -258,13 +273,15 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
       {/* Bottom action bar */}
       {!isOwner && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 flex gap-3">
-          <a
-            href={`tel:${listing.seller_phone}`}
-            className="flex-1 flex items-center justify-center gap-2 border border-itoni-blue text-itoni-blue font-bold py-3.5 rounded-xl"
-          >
-            <Icon name="Phone" size={18} />
-            Позвонить
-          </a>
+          {listing.seller_show_phone !== false && (
+            <a
+              href={`tel:${listing.seller_phone}`}
+              className="flex-1 flex items-center justify-center gap-2 border border-itoni-blue text-itoni-blue font-bold py-3.5 rounded-xl"
+            >
+              <Icon name="Phone" size={18} />
+              Позвонить
+            </a>
+          )}
           <button
             onClick={() => onChat(listing)}
             className="flex-1 flex items-center justify-center gap-2 bg-itoni-blue text-white font-bold py-3.5 rounded-xl"

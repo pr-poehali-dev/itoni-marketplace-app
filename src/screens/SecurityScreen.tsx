@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { getUser, clearUser } from '@/lib/auth';
+import { getUser, clearUser, saveUser } from '@/lib/auth';
 import { TERMS_TEXT, PRIVACY_TEXT, CONSENT_TEXT } from '@/lib/legal';
 import LegalScreen from '@/screens/LegalScreen';
 import Icon from '@/components/ui/icon';
@@ -22,10 +22,26 @@ function maskPhone(phone?: string): string {
 }
 
 export default function SecurityScreen({ onBack, onChangePhone, onDeleted }: Props) {
-  const user = getUser();
+  const [user, setUser] = useState(getUser());
   const [doc, setDoc] = useState<Doc>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showPhone, setShowPhone] = useState(user?.show_phone !== false);
+  const [savingShow, setSavingShow] = useState(false);
+
+  async function toggleShowPhone() {
+    const next = !showPhone;
+    setShowPhone(next);
+    setSavingShow(true);
+    const res = await api.setShowPhone(next);
+    setSavingShow(false);
+    if (res.success && res.user) {
+      saveUser(res.user);
+      setUser(res.user);
+    } else {
+      setShowPhone(!next);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -72,12 +88,24 @@ export default function SecurityScreen({ onBack, onChangePhone, onDeleted }: Pro
                 <p className="font-semibold text-gray-900">{maskPhone(user?.phone)}</p>
               </div>
             </div>
-            <button onClick={onChangePhone} className="w-full px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors">
+            <button onClick={onChangePhone} className="w-full px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors border-b border-gray-50">
               <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                 <Icon name="RefreshCw" size={18} className="text-gray-600" />
               </div>
               <p className="flex-1 text-left font-semibold text-gray-900 text-sm">Сменить номер телефона</p>
               <Icon name="ChevronRight" size={18} className="text-gray-300" />
+            </button>
+            <button onClick={toggleShowPhone} disabled={savingShow} className="w-full px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-itoni-blue-light flex items-center justify-center">
+                <Icon name="Eye" size={18} className="text-itoni-blue" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-semibold text-gray-900 text-sm">Показывать мой номер</p>
+                <p className="text-xs text-gray-500">В объявлениях покупатели увидят телефон</p>
+              </div>
+              <div className={`w-12 h-7 rounded-full transition-colors flex items-center px-0.5 ${showPhone ? 'bg-itoni-blue justify-end' : 'bg-gray-300 justify-start'}`}>
+                <div className="w-6 h-6 rounded-full bg-white shadow-sm" />
+              </div>
             </button>
           </div>
         </div>

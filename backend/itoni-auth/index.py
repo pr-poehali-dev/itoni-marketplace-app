@@ -5,6 +5,8 @@ import string
 import hashlib
 import hmac
 import smtplib
+import urllib.request
+import urllib.parse
 from email.mime.text import MIMEText
 from email.header import Header
 from datetime import datetime, timedelta
@@ -54,7 +56,37 @@ def user_payload(user_row):
         'accepted_terms': bool(user_row[6]),
         'login': user_row[7],
         'email': user_row[8],
+        'show_phone': bool(user_row[9]) if len(user_row) > 9 and user_row[9] is not None else True,
     }
+
+
+def normalize_phone(raw: str) -> str:
+    digits = ''.join(ch for ch in (raw or '') if ch.isdigit())
+    if len(digits) == 11 and digits[0] == '8':
+        digits = '7' + digits[1:]
+    if len(digits) == 10:
+        digits = '7' + digits
+    return '+' + digits if digits else ''
+
+
+def send_sms_code(phone: str, code: str) -> bool:
+    api_key = os.environ.get('SMS_API_KEY')
+    if not api_key:
+        return False
+    to = phone.lstrip('+')
+    params = urllib.parse.urlencode({
+        'api_id': api_key,
+        'to': to,
+        'msg': f'Ваш код для входа в иТони: {code}',
+        'json': 1,
+    })
+    url = f'https://sms.ru/sms/send?{params}'
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        return data.get('status') == 'OK'
+    except Exception:
+        return False
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -119,7 +151,57 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'content': content, 'categories': cats})}
 
-    USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email"
+    USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email, show_phone"
+
+    # POST sms_send - отправить SMS-код на номер
+    if method == 'POST' and action == 'sms_send':
+        phone = normalize_phone(body.get('phone') or '')
+        if len(phone) < 12:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
+
+        code = ''.join(random.choices(string.digits, k=4))
+        expires_at = datetime.now() + timedelta(minutes=10)
+        cur.execute("INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s, %s, %s)", (phone, code, expires_at))
+        conn.commit()
+
+        sent = send_sms_code(phone, code)
+        cur.close(); conn.close()
+        if not sent:
+            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не удалось отправить SMS. Попробуйте позже.'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': 'Код отправлен'})}
+
+    # POST sms_verify - проверить код и войти/зарегистрировать
+    if method == 'POST' and action == 'sms_verify':
+        phone = normalize_phone(body.get('phone') or '')
+        code = (body.get('code') or '').strip()
+        if not phone or not code:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите номер и код'})}
+
+        cur.execute(
+            "SELECT id FROM itoni_sms_codes WHERE phone=%s AND code=%s AND used=FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+            (phone, code)
+        )
+        code_row = cur.fetchone()
+        if not code_row:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный или устаревший код'})}
+        cur.execute("UPDATE itoni_sms_codes SET used=TRUE WHERE id=%s", (code_row[0],))
+
+        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE phone=%s", (phone,))
+        user = cur.fetchone()
+        is_new = False
+        if not user:
+            cur.execute(
+                "INSERT INTO itoni_users (phone) VALUES (%s) RETURNING " + USER_COLS,
+                (phone,)
+            )
+            user = cur.fetchone()
+            is_new = True
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': is_new, 'accepted_terms': bool(user[6]), 'user': user_payload(user)})}
 
     # POST register - регистрация по логину и паролю
     if method == 'POST' and action == 'register':
@@ -287,15 +369,35 @@ def handler(event: dict, context) -> dict:
         if not user_id:
             return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
 
+        # Обновление переключателя показа номера (отдельный кейс)
+        if 'show_phone' in body:
+            cur.execute(
+                "UPDATE itoni_users SET show_phone=%s WHERE id=%s RETURNING id, name, phone, city, region, photo, accepted_terms, login, email, show_phone",
+                (bool(body.get('show_phone')), int(user_id))
+            )
+            user = cur.fetchone()
+            conn.commit()
+            cur.close(); conn.close()
+            if not user:
+                return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Пользователь не найден'})}
+            return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'user': user_payload(user)})}
+
         name = body.get('name')
         city = body.get('city')
         region = body.get('region')
         photo = body.get('photo')
+        new_phone = body.get('phone')
 
-        cur.execute(
-            "UPDATE itoni_users SET name=%s, city=%s, region=%s, photo=%s WHERE id=%s RETURNING id, name, phone, city, region, photo",
-            (name, city, region, photo, int(user_id))
-        )
+        if new_phone is not None:
+            cur.execute(
+                "UPDATE itoni_users SET name=%s, city=%s, region=%s, photo=%s, phone=%s WHERE id=%s RETURNING id, name, phone, city, region, photo, accepted_terms, login, email, show_phone",
+                (name, city, region, photo, normalize_phone(new_phone), int(user_id))
+            )
+        else:
+            cur.execute(
+                "UPDATE itoni_users SET name=%s, city=%s, region=%s, photo=%s WHERE id=%s RETURNING id, name, phone, city, region, photo, accepted_terms, login, email, show_phone",
+                (name, city, region, photo, int(user_id))
+            )
         user = cur.fetchone()
         conn.commit()
         cur.close()
@@ -307,7 +409,7 @@ def handler(event: dict, context) -> dict:
         return {
             'statusCode': 200,
             'headers': CORS_HEADERS,
-            'body': json.dumps({'success': True, 'user': {'id': user[0], 'name': user[1], 'phone': user[2], 'city': user[3], 'region': user[4], 'photo': user[5]}})
+            'body': json.dumps({'success': True, 'user': user_payload(user)})
         }
 
     cur.close()

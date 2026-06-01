@@ -25,15 +25,18 @@ export const api = {
   loginPassword: (login: string, password: string) =>
     fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', login, password }) }).then(r => r.json()),
 
-  // Auth: email + код
-  sendEmailCode: (email: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'email_send', email }) }).then(r => r.json()),
+  // Auth: SMS + код
+  sendSmsCode: (phone: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sms_send', phone }) }).then(r => r.json()),
 
-  verifyEmailCode: (email: string, code: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'email_verify', email, code }) }).then(r => r.json()),
+  verifySmsCode: (phone: string, code: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sms_verify', phone, code }) }).then(r => r.json()),
 
-  updateProfile: (data: { name?: string; city?: string; region?: string; photo?: string }) =>
+  updateProfile: (data: { name?: string; city?: string; region?: string; photo?: string; phone?: string }) =>
     fetch(URLS.auth, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
+
+  setShowPhone: (show_phone: boolean) =>
+    fetch(URLS.auth, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ show_phone }) }).then(r => r.json()),
 
   acceptTerms: () =>
     fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'accept' }) }).then(r => r.json()),
@@ -134,6 +137,7 @@ export type Listing = {
   seller_name: string;
   seller_phone: string;
   seller_photo: string;
+  seller_show_phone?: boolean;
 };
 
 export type User = {
@@ -146,6 +150,7 @@ export type User = {
   accepted_terms?: boolean;
   login?: string;
   email?: string;
+  show_phone?: boolean;
 };
 
 export type Message = {
