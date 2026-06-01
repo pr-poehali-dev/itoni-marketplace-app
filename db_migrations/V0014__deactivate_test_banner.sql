@@ -1,0 +1,1 @@
+UPDATE itoni_banners SET is_active = FALSE, title = '[удалить] тест' WHERE title = 'Тест';
