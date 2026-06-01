@@ -14,15 +14,30 @@ export function clearAdminToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-function call(action: string, payload: Record<string, unknown> = {}) {
+async function call(action: string, payload: Record<string, unknown> = {}) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = getAdminToken();
-  if (token) headers['X-Admin-Token'] = token;
-  return fetch(AUTH_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ action, ...payload }),
-  }).then(r => r.json());
+  if (token) {
+    headers['X-Admin-Token'] = token;
+    headers['x-admin-token'] = token;
+  }
+  try {
+    const r = await fetch(AUTH_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.error('[adminApi] not JSON:', action, r.status, text);
+      return { error: `Ошибка сервера (${r.status})` };
+    }
+  } catch (e) {
+    console.error('[adminApi] network error:', action, e);
+    return { error: 'Нет связи с сервером' };
+  }
 }
 
 export const adminApi = {

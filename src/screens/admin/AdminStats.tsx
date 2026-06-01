@@ -11,11 +11,16 @@ type Stats = {
 
 export default function AdminStats() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    adminApi.stats().then(res => setStats(res.stats));
+    adminApi.stats().then(res => {
+      if (res?.stats) setStats(res.stats);
+      else setError(res?.error || 'Не удалось загрузить статистику');
+    });
   }, []);
 
+  if (error) return <p className="text-center text-red-500 py-8 text-sm">{error}</p>;
   if (!stats) return <p className="text-center text-gray-400 py-8 text-sm">Загрузка...</p>;
 
   const cards = [
