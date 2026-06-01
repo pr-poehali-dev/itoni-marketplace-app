@@ -97,7 +97,7 @@ export default function AuthScreen({ onAuth }: Props) {
         {step === 'phone' ? (
           <div className="animate-slide-up">
             <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
-            <p className="text-gray-400 text-sm text-center mb-5">Мы отправим SMS с кодом на ваш номер</p>
+            <p className="text-gray-400 text-sm text-center mb-5">Мы позвоним — код это последние 4 цифры номера звонка</p>
 
             <div className="flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-blue-500 transition-colors">
               <Icon name="Phone" size={20} className="text-gray-400" />
@@ -119,13 +119,13 @@ export default function AuthScreen({ onAuth }: Props) {
               disabled={loading}
               className="w-full bg-itoni-blue text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/30"
             >
-              {loading ? 'Отправляем...' : 'Получить код'}
+              {loading ? 'Звоним...' : 'Получить код звонком'}
             </button>
           </div>
         ) : (
           <div className="animate-slide-up">
             <h2 className="text-2xl font-bold text-white text-center mb-1">Введите код</h2>
-            <p className="text-gray-400 text-sm text-center mb-5">Код отправлен на {formatPhone(digits)}</p>
+            <p className="text-gray-400 text-sm text-center mb-5">Сейчас поступит звонок на {formatPhone(digits)}. Код — последние 4 цифры этого номера</p>
 
             <div className="flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-blue-500 transition-colors">
               <Icon name="KeyRound" size={20} className="text-gray-400" />

@@ -69,24 +69,27 @@ def normalize_phone(raw: str) -> str:
     return '+' + digits if digits else ''
 
 
-def send_sms_code(phone: str, code: str) -> bool:
+def send_call_code(phone: str):
+    """Звонок-авторизация SMS.RU (code/call). Код = последние 4 цифры входящего номера.
+    Возвращает (ok: bool, code: str|None, error: str|None)."""
     api_key = os.environ.get('SMS_API_KEY')
     if not api_key:
-        return False
+        return False, None, 'Ключ SMS не настроен'
     to = phone.lstrip('+')
     params = urllib.parse.urlencode({
         'api_id': api_key,
-        'to': to,
-        'msg': f'Ваш код для входа в иТони: {code}',
+        'phone': to,
         'json': 1,
     })
-    url = f'https://sms.ru/sms/send?{params}'
+    url = f'https://sms.ru/code/call?{params}'
     try:
-        with urllib.request.urlopen(url, timeout=15) as resp:
+        with urllib.request.urlopen(url, timeout=20) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-        return data.get('status') == 'OK'
-    except Exception:
-        return False
+    except Exception as e:
+        return False, None, f'Сеть: {e}'
+    if data.get('status') == 'OK':
+        return True, str(data.get('code', '')), None
+    return False, None, data.get('status_text') or 'Ошибка SMS.RU'
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -153,23 +156,23 @@ def handler(event: dict, context) -> dict:
 
     USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email, show_phone"
 
-    # POST sms_send - отправить SMS-код на номер
+    # POST sms_send - позвонить и продиктовать код (последние 4 цифры номера звонка)
     if method == 'POST' and action == 'sms_send':
         phone = normalize_phone(body.get('phone') or '')
         if len(phone) < 12:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
 
-        code = ''.join(random.choices(string.digits, k=4))
-        expires_at = datetime.now() + timedelta(minutes=10)
-        cur.execute("INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s, %s, %s)", (phone, code, expires_at))
-        conn.commit()
+        ok, code, err = send_call_code(phone)
+        if not ok or not code:
+            cur.close(); conn.close()
+            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': err or 'Не удалось позвонить. Попробуйте позже.'})}
 
-        sent = send_sms_code(phone, code)
+        expires_at = datetime.now() + timedelta(minutes=10)
+        cur.execute("INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s, %s, %s)", (phone, code.strip(), expires_at))
+        conn.commit()
         cur.close(); conn.close()
-        if not sent:
-            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не удалось отправить SMS. Попробуйте позже.'})}
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': 'Код отправлен'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': 'Звоним вам. Введите последние 4 цифры номера, с которого поступит звонок.'})}
 
     # POST sms_verify - проверить код и войти/зарегистрировать
     if method == 'POST' and action == 'sms_verify':
