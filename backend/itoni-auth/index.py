@@ -72,7 +72,7 @@ def normalize_phone(raw: str) -> str:
 def send_call_code(phone: str):
     """Звонок-авторизация SMS.RU (code/call). Код = последние 4 цифры входящего номера.
     Возвращает (ok: bool, code: str|None, error: str|None)."""
-    api_key = os.environ.get('SMS_API_KEY')
+    api_key = (os.environ.get('SMS_API_KEY') or '').strip()
     if not api_key:
         return False, None, 'Ключ SMS не настроен'
     to = phone.lstrip('+')
@@ -84,12 +84,15 @@ def send_call_code(phone: str):
     url = f'https://sms.ru/code/call?{params}'
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
+            raw = resp.read().decode('utf-8')
+        print('SMS.RU code/call response:', raw)
+        data = json.loads(raw)
     except Exception as e:
-        return False, None, f'Сеть: {e}'
+        print('SMS.RU code/call error:', repr(e))
+        return False, None, 'Сервис звонков временно недоступен'
     if data.get('status') == 'OK':
         return True, str(data.get('code', '')), None
-    return False, None, data.get('status_text') or 'Ошибка SMS.RU'
+    return False, None, data.get('status_text') or 'Не удалось совершить звонок'
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
