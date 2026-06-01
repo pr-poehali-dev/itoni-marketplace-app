@@ -311,6 +311,7 @@ export default function Index() {
           onSecurity={() => navigate({ name: 'security' })}
           onSupport={() => navigate({ name: 'support' })}
           onNotificationSettings={() => navigate({ name: 'notification-settings' })}
+          onAdmin={() => navigate({ name: 'admin-login' })}
         />
       )}
 

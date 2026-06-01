@@ -3,8 +3,8 @@ import json
 import io
 import csv
 
-ADMIN_EMAIL = 'muratdzaurov@mail.ru'
-ADMIN_PASSWORD = 'Dzaurov23061994'
+ADMIN_EMAIL = (os.environ.get('ADMIN_EMAIL') or 'muratdzaurov@mail.ru').strip()
+ADMIN_PASSWORD = (os.environ.get('ADMIN_PASSWORD') or 'Dzaurov23061994').strip()
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -45,11 +45,16 @@ def handle_admin(action, event, body, conn, cur):
     if action == 'admin_login':
         email = (body.get('email') or '').strip().lower()
         password = (body.get('password') or '').strip()
-        if email == ADMIN_EMAIL.lower() and password == ADMIN_PASSWORD:
+        email_ok = email == ADMIN_EMAIL.lower()
+        password_ok = password == ADMIN_PASSWORD
+        print(f'[admin_login] email_ok={email_ok} password_ok={password_ok} got_email={email!r}')
+        if email_ok and password_ok:
             _log(cur, 'Вход в админ-панель')
             conn.commit()
             return _resp(200, {'success': True, 'token': ADMIN_TOKEN})
-        return _resp(401, {'error': 'Неверный email или пароль'})
+        if not email_ok:
+            return _resp(401, {'error': 'Неверный email'})
+        return _resp(401, {'error': 'Неверный пароль'})
 
     # Все остальные требуют токен
     if not is_admin(event, body):

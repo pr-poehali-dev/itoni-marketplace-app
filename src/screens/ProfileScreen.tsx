@@ -11,9 +11,10 @@ interface Props {
   onSecurity: () => void;
   onSupport: () => void;
   onNotificationSettings: () => void;
+  onAdmin: () => void;
 }
 
-export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onSecurity, onSupport, onNotificationSettings }: Props) {
+export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onSecurity, onSupport, onNotificationSettings, onAdmin }: Props) {
   const [user, setUser] = useState(getUser());
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -248,6 +249,15 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onS
         >
           <Icon name="LogOut" size={18} />
           Выйти из аккаунта
+        </button>
+
+        {/* Admin entry — вход защищён паролем */}
+        <button
+          onClick={onAdmin}
+          className="w-full text-gray-400 text-xs font-medium py-3 flex items-center justify-center gap-1.5"
+        >
+          <Icon name="ShieldCheck" size={14} />
+          Админ-панель
         </button>
 
       </div>
