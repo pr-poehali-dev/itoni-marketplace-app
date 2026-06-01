@@ -88,23 +88,6 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
           </div>
         </div>
 
-        {/* Ad banners from admin */}
-        {banners.map(b => (
-          <a
-            key={b.id}
-            href={b.link_url || '#'}
-            target={b.link_url ? '_blank' : undefined}
-            rel="noopener noreferrer"
-            className="block rounded-2xl overflow-hidden card-shadow"
-          >
-            {b.image_url ? (
-              <img src={b.image_url} alt={b.title || ''} className="w-full h-32 object-cover" />
-            ) : (
-              <div className="bg-itoni-orange-light p-4 text-center font-bold text-itoni-orange">{b.title}</div>
-            )}
-          </a>
-        ))}
-
         {/* Categories */}
         <div>
           <h3 className="font-bold text-gray-900 mb-3">Категории</h3>
@@ -169,6 +152,28 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
             </div>
           ))}
         </div>
+
+        {/* Ad banners from admin (bottom) */}
+        {banners.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-medium text-gray-400 text-center">Реклама</p>
+            {banners.map(b => (
+              <a
+                key={b.id}
+                href={b.link_url || '#'}
+                target={b.link_url ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                className="block rounded-2xl overflow-hidden card-shadow"
+              >
+                {b.image_url ? (
+                  <img src={b.image_url} alt={b.title || ''} className="w-full h-32 object-cover" />
+                ) : (
+                  <div className="bg-itoni-orange-light p-4 text-center font-bold text-itoni-orange">{b.title}</div>
+                )}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
