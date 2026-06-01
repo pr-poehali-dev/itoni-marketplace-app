@@ -2,6 +2,8 @@ import json
 import os
 import random
 import string
+import hashlib
+import hmac
 import smtplib
 from email.mime.text import MIMEText
 from email.header import Header
@@ -10,6 +12,49 @@ import psycopg2
 from admin import handle_admin
 
 SUPPORT_EMAIL = 'muratdzaurov@mail.ru'
+
+
+def hash_password(password: str) -> str:
+    salt = os.environ.get('DATABASE_URL', 'itoni-salt')[:16]
+    return hashlib.sha256((salt + password).encode('utf-8')).hexdigest()
+
+
+def check_password(password: str, hashed: str) -> bool:
+    return hmac.compare_digest(hash_password(password), hashed or '')
+
+
+def send_email_code(to_email: str, code: str) -> bool:
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_password = os.environ.get('SMTP_PASSWORD')
+    if not smtp_user or not smtp_password:
+        return False
+    text = (
+        f"Ваш код для входа в иТони: {code}\n\n"
+        "Код действует 10 минут. Если вы не запрашивали вход — просто проигнорируйте это письмо."
+    )
+    msg = MIMEText(text, 'plain', 'utf-8')
+    msg['Subject'] = Header('Код для входа в иТони', 'utf-8')
+    msg['From'] = smtp_user
+    msg['To'] = to_email
+    server = smtplib.SMTP_SSL('smtp.mail.ru', 465, timeout=20)
+    server.login(smtp_user, smtp_password)
+    server.sendmail(smtp_user, [to_email], msg.as_string())
+    server.quit()
+    return True
+
+
+def user_payload(user_row):
+    return {
+        'id': user_row[0],
+        'name': user_row[1],
+        'phone': user_row[2] or '',
+        'city': user_row[3],
+        'region': user_row[4],
+        'photo': user_row[5],
+        'accepted_terms': bool(user_row[6]),
+        'login': user_row[7],
+        'email': user_row[8],
+    }
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -74,84 +119,92 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'content': content, 'categories': cats})}
 
-    # POST send - отправить SMS код
-    if method == 'POST' and action == 'send':
-        phone = body.get('phone', '').strip()
-        if not phone:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите номер телефона'})}
+    USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email"
+
+    # POST register - регистрация по логину и паролю
+    if method == 'POST' and action == 'register':
+        login = (body.get('login') or '').strip()
+        password = body.get('password') or ''
+        name = (body.get('name') or '').strip()
+        if len(login) < 3:
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Логин минимум 3 символа'})}
+        if len(password) < 6:
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Пароль минимум 6 символов'})}
+
+        cur.execute("SELECT id FROM itoni_users WHERE LOWER(login)=LOWER(%s)", (login,))
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Такой логин уже занят'})}
+
+        cur.execute(
+            "INSERT INTO itoni_users (login, password_hash, name) VALUES (%s, %s, %s) RETURNING id, name, phone, city, region, photo, accepted_terms, login, email",
+            (login, hash_password(password), name or login)
+        )
+        user = cur.fetchone()
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': True, 'accepted_terms': bool(user[6]), 'user': user_payload(user)})}
+
+    # POST login - вход по логину и паролю
+    if method == 'POST' and action == 'login':
+        login = (body.get('login') or '').strip()
+        password = body.get('password') or ''
+        if not login or not password:
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите логин и пароль'})}
+
+        cur.execute("SELECT " + USER_COLS + ", password_hash FROM itoni_users WHERE LOWER(login)=LOWER(%s)", (login,))
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        if not row or not check_password(password, row[9]):
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный логин или пароль'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': False, 'accepted_terms': bool(row[6]), 'user': user_payload(row)})}
+
+    # POST email_send - отправить код на email
+    if method == 'POST' and action == 'email_send':
+        email = (body.get('email') or '').strip().lower()
+        if '@' not in email or '.' not in email:
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный email'})}
 
         code = ''.join(random.choices(string.digits, k=4))
         expires_at = datetime.now() + timedelta(minutes=10)
-
-        cur.execute(
-            "INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s, %s, %s)",
-            (phone, code, expires_at)
-        )
+        cur.execute("INSERT INTO itoni_email_codes (email, code, expires_at) VALUES (%s, %s, %s)", (email, code, expires_at))
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
 
-        # В реальном проекте здесь отправляется SMS
-        # Для демо возвращаем код в ответе
-        return {
-            'statusCode': 200,
-            'headers': CORS_HEADERS,
-            'body': json.dumps({'success': True, 'demo_code': code, 'message': f'Код отправлен на {phone}'})
-        }
+        if not send_email_code(email, code):
+            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Отправка на email пока не настроена. Попробуйте вход по логину и паролю.'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': f'Код отправлен на {email}'})}
 
-    # POST verify - проверить код и войти
-    if method == 'POST' and action == 'verify':
-        phone = body.get('phone', '').strip()
-        code = body.get('code', '').strip()
-
-        if not phone or not code:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите телефон и код'})}
+    # POST email_verify - проверить код с email и войти/зарегистрировать
+    if method == 'POST' and action == 'email_verify':
+        email = (body.get('email') or '').strip().lower()
+        code = (body.get('code') or '').strip()
+        if not email or not code:
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите email и код'})}
 
         cur.execute(
-            "SELECT id FROM itoni_sms_codes WHERE phone=%s AND code=%s AND used=FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
-            (phone, code)
+            "SELECT id FROM itoni_email_codes WHERE email=%s AND code=%s AND used=FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+            (email, code)
         )
-        sms_row = cur.fetchone()
-
-        if not sms_row:
+        code_row = cur.fetchone()
+        if not code_row:
+            cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный или устаревший код'})}
+        cur.execute("UPDATE itoni_email_codes SET used=TRUE WHERE id=%s", (code_row[0],))
 
-        cur.execute("UPDATE itoni_sms_codes SET used=TRUE WHERE id=%s", (sms_row[0],))
-
-        cur.execute("SELECT id, name, city, region, photo, accepted_terms FROM itoni_users WHERE phone=%s", (phone,))
+        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE LOWER(email)=LOWER(%s)", (email,))
         user = cur.fetchone()
-
         is_new = False
         if not user:
             cur.execute(
-                "INSERT INTO itoni_users (phone) VALUES (%s) RETURNING id, name, city, region, photo, accepted_terms",
-                (phone,)
+                "INSERT INTO itoni_users (email, name) VALUES (%s, %s) RETURNING id, name, phone, city, region, photo, accepted_terms, login, email",
+                (email, email.split('@')[0])
             )
             user = cur.fetchone()
             is_new = True
-
         conn.commit()
-        cur.close()
-        conn.close()
-
-        return {
-            'statusCode': 200,
-            'headers': CORS_HEADERS,
-            'body': json.dumps({
-                'success': True,
-                'is_new': is_new,
-                'accepted_terms': bool(user[5]),
-                'user': {
-                    'id': user[0],
-                    'name': user[1],
-                    'phone': phone,
-                    'city': user[2],
-                    'region': user[3],
-                    'photo': user[4],
-                    'accepted_terms': bool(user[5])
-                }
-            })
-        }
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': is_new, 'accepted_terms': bool(user[6]), 'user': user_payload(user)})}
 
     # POST support - обращение в поддержку (письмо администратору)
     if method == 'POST' and action == 'support':

@@ -18,12 +18,19 @@ function authHeaders(): Record<string, string> {
 }
 
 export const api = {
-  // Auth
-  sendCode: (phone: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', phone }) }).then(r => r.json()),
+  // Auth: логин + пароль
+  register: (login: string, password: string, name?: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'register', login, password, name }) }).then(r => r.json()),
 
-  verifyCode: (phone: string, code: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'verify', phone, code }) }).then(r => r.json()),
+  loginPassword: (login: string, password: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', login, password }) }).then(r => r.json()),
+
+  // Auth: email + код
+  sendEmailCode: (email: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'email_send', email }) }).then(r => r.json()),
+
+  verifyEmailCode: (email: string, code: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'email_verify', email, code }) }).then(r => r.json()),
 
   updateProfile: (data: { name?: string; city?: string; region?: string; photo?: string }) =>
     fetch(URLS.auth, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
@@ -137,6 +144,8 @@ export type User = {
   region?: string;
   photo?: string;
   accepted_terms?: boolean;
+  login?: string;
+  email?: string;
 };
 
 export type Message = {
