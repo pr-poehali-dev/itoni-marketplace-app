@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 
 interface Props {
   onAuth: () => void;
+  onAdmin?: () => void;
 }
 
 function formatPhone(digits: string): string {
@@ -19,7 +20,7 @@ function formatPhone(digits: string): string {
   return out;
 }
 
-export default function AuthScreen({ onAuth }: Props) {
+export default function AuthScreen({ onAuth, onAdmin }: Props) {
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [digits, setDigits] = useState('');
   const [code, setCode] = useState('');
@@ -73,6 +74,15 @@ export default function AuthScreen({ onAuth }: Props) {
 
   return (
     <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
+      {onAdmin && (
+        <button
+          onClick={onAdmin}
+          className="absolute top-4 right-4 z-20 flex items-center gap-1 text-gray-500 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white/5 active:bg-white/10"
+        >
+          <Icon name="ShieldCheck" size={13} />
+          Админ
+        </button>
+      )}
       <div className="relative flex-1 flex flex-col items-center justify-center pt-14 px-6">
         <div className="text-center z-10 animate-fade-in">
           <span className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-clip-text text-transparent" style={{ fontFamily: 'Golos Text' }}>

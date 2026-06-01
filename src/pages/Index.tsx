@@ -23,7 +23,7 @@ import AdminPanelScreen from '@/screens/AdminPanelScreen';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import MessageToast, { ToastData } from '@/components/MessageToast';
 import { clearUser } from '@/lib/auth';
-import { getAdminToken } from '@/lib/adminApi';
+import { getAdminToken, clearAdminToken } from '@/lib/adminApi';
 import { applyTheme, getTheme } from '@/lib/theme';
 
 type Screen =
@@ -66,6 +66,7 @@ function getInitialScreen(): Screen {
 
 export default function Index() {
   const [authed, setAuthed] = useState(!!getUser());
+  const [adminAuthed, setAdminAuthed] = useState(!!getAdminToken());
   const [screen, setScreen] = useState<Screen>(getInitialScreen);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [favorites, setFavorites] = useState<number[]>([]);
@@ -78,6 +79,13 @@ export default function Index() {
   // Применить сохранённую тему при старте
   useEffect(() => {
     applyTheme(getTheme());
+  }, []);
+
+  // Сброс админ-доступа при устаревшей сессии
+  useEffect(() => {
+    const onDenied = () => setAdminAuthed(false);
+    window.addEventListener('admin-access-denied', onDenied);
+    return () => window.removeEventListener('admin-access-denied', onDenied);
   }, []);
 
   // Запись установки приложения один раз
@@ -186,31 +194,26 @@ export default function Index() {
   }
 
   if (!authed) {
-    if (screen.name === 'admin-login') {
+    if (screen.name === 'admin-panel' && adminAuthed) {
       return (
-        <AdminLoginScreen
-          onBack={() => setScreen({ name: 'home' })}
-          onSuccess={() => setScreen({ name: 'admin-panel' })}
+        <AdminPanelScreen
+          onExit={() => { clearAdminToken(); setAdminAuthed(false); setScreen({ name: 'admin-login' }); }}
+          onOpenListing={(id) => setScreen({ name: 'listing', id })}
         />
       );
     }
-    if (screen.name === 'admin-panel') {
-      if (!getAdminToken()) return (
+    if (screen.name === 'admin-login' || screen.name === 'admin-panel') {
+      return (
         <AdminLoginScreen
           onBack={() => setScreen({ name: 'home' })}
-          onSuccess={() => setScreen({ name: 'admin-panel' })}
-        />
-      );
-      return (
-        <AdminPanelScreen
-          onExit={() => setScreen({ name: 'admin-login' })}
-          onOpenListing={(id) => setScreen({ name: 'listing', id })}
+          onSuccess={() => { setAdminAuthed(true); setScreen({ name: 'admin-panel' }); }}
         />
       );
     }
     return (
       <AuthScreen
         onAuth={() => setAuthed(true)}
+        onAdmin={() => setScreen({ name: 'admin-login' })}
       />
     );
   }
@@ -318,20 +321,20 @@ export default function Index() {
       {screen.name === 'admin-login' && (
         <AdminLoginScreen
           onBack={() => navigate({ name: 'profile' })}
-          onSuccess={() => navigate({ name: 'admin-panel' })}
+          onSuccess={() => { setAdminAuthed(true); navigate({ name: 'admin-panel' }); }}
         />
       )}
 
       {screen.name === 'admin-panel' && (
-        getAdminToken() ? (
+        adminAuthed ? (
           <AdminPanelScreen
-            onExit={() => navigate({ name: 'admin-login' })}
+            onExit={() => { clearAdminToken(); setAdminAuthed(false); navigate({ name: 'profile' }); }}
             onOpenListing={handleListingClick}
           />
         ) : (
           <AdminLoginScreen
             onBack={() => navigate({ name: 'profile' })}
-            onSuccess={() => navigate({ name: 'admin-panel' })}
+            onSuccess={() => { setAdminAuthed(true); navigate({ name: 'admin-panel' }); }}
           />
         )
       )}
