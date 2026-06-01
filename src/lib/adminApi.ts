@@ -27,6 +27,11 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
       headers,
       body: JSON.stringify({ action, admin_token: token, ...payload }),
     });
+    if (r.status === 403 && action !== 'admin_login') {
+      clearAdminToken();
+      window.dispatchEvent(new Event('admin-access-denied'));
+      return { error: 'Сессия устарела. Войдите снова.' };
+    }
     const text = await r.text();
     try {
       return JSON.parse(text);

@@ -194,10 +194,16 @@ export default function Index() {
         />
       );
     }
-    if (screen.name === 'admin-panel' && getAdminToken()) {
+    if (screen.name === 'admin-panel') {
+      if (!getAdminToken()) return (
+        <AdminLoginScreen
+          onBack={() => setScreen({ name: 'home' })}
+          onSuccess={() => setScreen({ name: 'admin-panel' })}
+        />
+      );
       return (
         <AdminPanelScreen
-          onExit={() => setScreen({ name: 'home' })}
+          onExit={() => setScreen({ name: 'admin-login' })}
           onOpenListing={(id) => setScreen({ name: 'listing', id })}
         />
       );
@@ -316,10 +322,17 @@ export default function Index() {
       )}
 
       {screen.name === 'admin-panel' && (
-        <AdminPanelScreen
-          onExit={() => navigate({ name: 'profile' })}
-          onOpenListing={handleListingClick}
-        />
+        getAdminToken() ? (
+          <AdminPanelScreen
+            onExit={() => navigate({ name: 'admin-login' })}
+            onOpenListing={handleListingClick}
+          />
+        ) : (
+          <AdminLoginScreen
+            onBack={() => navigate({ name: 'profile' })}
+            onSuccess={() => navigate({ name: 'admin-panel' })}
+          />
+        )
       )}
 
       {screen.name === 'notification-settings' && (

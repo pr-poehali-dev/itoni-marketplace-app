@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { clearAdminToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
@@ -42,6 +42,12 @@ export default function AdminPanelScreen({ onExit, onOpenListing }: Props) {
     clearAdminToken();
     onExit();
   }
+
+  useEffect(() => {
+    const onDenied = () => { clearAdminToken(); onExit(); };
+    window.addEventListener('admin-access-denied', onDenied);
+    return () => window.removeEventListener('admin-access-denied', onDenied);
+  }, [onExit]);
 
   return (
     <div className="pb-nav bg-gray-50 min-h-screen">
