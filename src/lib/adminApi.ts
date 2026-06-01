@@ -25,7 +25,7 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
     const r = await fetch(AUTH_URL, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ action, ...payload }),
+      body: JSON.stringify({ action, admin_token: token, ...payload }),
     });
     const text = await r.text();
     try {

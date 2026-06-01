@@ -27,8 +27,14 @@ def _log(cur, action):
     )
 
 
-def is_admin(event):
-    token = event.get('headers', {}).get('X-Admin-Token') or event.get('headers', {}).get('x-admin-token')
+def is_admin(event, body=None):
+    headers = event.get('headers', {}) or {}
+    token = (
+        headers.get('X-Admin-Token')
+        or headers.get('x-admin-token')
+        or headers.get('X-ADMIN-TOKEN')
+        or (body or {}).get('admin_token')
+    )
     return token == ADMIN_TOKEN
 
 
@@ -46,7 +52,7 @@ def handle_admin(action, event, body, conn, cur):
         return _resp(401, {'error': 'Неверный email или пароль'})
 
     # Все остальные требуют токен
-    if not is_admin(event):
+    if not is_admin(event, body):
         return _resp(403, {'error': 'Доступ запрещён'})
 
     # ── РАЗДЕЛ 1. ПОЛЬЗОВАТЕЛИ ──
