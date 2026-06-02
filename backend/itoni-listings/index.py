@@ -12,6 +12,19 @@ CORS_HEADERS = {
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
+def touch_activity(cur, user_id):
+    """Обновляет last_activity не чаще 1 раза в минуту"""
+    if not user_id:
+        return
+    try:
+        cur.execute(
+            """UPDATE itoni_users SET last_activity = NOW()
+               WHERE id = %s AND (last_activity IS NULL OR last_activity < NOW() - INTERVAL '1 minute')""",
+            (int(user_id),)
+        )
+    except (ValueError, TypeError):
+        pass
+
 def listing_to_dict(row):
     return {
         'id': row[0],
@@ -34,7 +47,8 @@ def listing_to_dict(row):
         'seller_name': row[17],
         'seller_phone': row[18],
         'seller_photo': row[19],
-        'seller_show_phone': bool(row[20]) if len(row) > 20 and row[20] is not None else True
+        'seller_show_phone': bool(row[20]) if len(row) > 20 and row[20] is not None else True,
+        'favorites_count': row[21] if len(row) > 21 and row[21] is not None else 0
     }
 
 def handler(event: dict, context) -> dict:
@@ -55,6 +69,11 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
+    # Отметка активности пользователя (онлайн-статус)
+    _uid = (event.get('headers', {}) or {}).get('X-User-Id') or (event.get('headers', {}) or {}).get('x-user-id')
+    touch_activity(cur, _uid)
+    conn.commit()
+
     # GET ?id={id} - получить одно объявление
     if method == 'GET' and params.get('id'):
         listing_id = int(params['id'])
@@ -62,7 +81,8 @@ def handler(event: dict, context) -> dict:
             """SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
                l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,
                l.city, l.region, l.images, l.views, l.created_at,
-               u.name, u.phone, u.photo, u.show_phone
+               u.name, u.phone, u.photo, u.show_phone,
+               (SELECT COUNT(*) FROM itoni_favorites f WHERE f.listing_id = l.id)
                FROM itoni_listings l
                LEFT JOIN itoni_users u ON u.id = l.user_id
                WHERE l.id=%s AND l.is_active=TRUE""",
@@ -158,7 +178,8 @@ def handler(event: dict, context) -> dict:
             f"""SELECT l.id, l.user_id, l.title, l.description, l.price, l.category,
                l.brand, l.model, l.year, l.mileage, l.fuel_type, l.transmission,
                l.city, l.region, l.images, l.views, l.created_at,
-               u.name, u.phone, u.photo, u.show_phone
+               u.name, u.phone, u.photo, u.show_phone,
+               (SELECT COUNT(*) FROM itoni_favorites f WHERE f.listing_id = l.id)
                FROM itoni_listings l
                LEFT JOIN itoni_users u ON u.id = l.user_id
                WHERE {where_clause}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Heart } from 'lucide-react';
-import { Listing, formatPrice, CATEGORIES } from '@/lib/api';
+import { Listing, formatPrice, formatRelativeDay, CATEGORIES } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -87,6 +87,9 @@ export default function ListingCard({ listing, isFavorite, onFavoriteToggle, onC
           {listing.mileage !== undefined && listing.mileage > 0 && <span>· {new Intl.NumberFormat('ru-RU').format(listing.mileage)} км</span>}
           {listing.city && <span>· {listing.city}</span>}
         </div>
+        {listing.created_at && (
+          <p className="text-[11px] text-gray-400 mt-1">{formatRelativeDay(listing.created_at)}</p>
+        )}
 
         {/* Share */}
         <button

@@ -103,10 +103,15 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew, 
                 <button onClick={() => onListingClick(l.id)} className="flex-1 min-w-0 text-left">
                   <p className="font-semibold text-gray-900 text-sm line-clamp-2 mb-1">{l.title}</p>
                   <p className="font-extrabold text-itoni-blue text-base">{formatPrice(l.price)}</p>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                    <Icon name="Eye" size={11} />
-                    <span>{l.views}</span>
-                    <span>·</span>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <Icon name="Eye" size={11} />
+                      {l.views} просм.
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Icon name="Heart" size={11} />
+                      {l.favorites_count ?? 0} в избранном
+                    </span>
                     <span>{formatDate(l.created_at)}</span>
                   </div>
                 </button>

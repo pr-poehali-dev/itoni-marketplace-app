@@ -35,6 +35,14 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
+    # Отметка активности пользователя (онлайн-статус), не чаще 1 раза в минуту
+    cur.execute(
+        """UPDATE itoni_users SET last_activity = NOW()
+           WHERE id = %s AND (last_activity IS NULL OR last_activity < NOW() - INTERVAL '1 minute')""",
+        (user_id,)
+    )
+    conn.commit()
+
     # GET ?mode=chats - список чатов пользователя
     if method == 'GET' and params.get('mode') == 'chats':
         cur.execute(
@@ -45,7 +53,7 @@ def handler(event: dict, context) -> dict:
                )
                m.id, m.sender_id, m.receiver_id, m.listing_id, m.text, m.created_at, m.is_read,
                u.name, u.photo,
-               l.title, l.images
+               l.title, l.images, u.last_activity
                FROM itoni_messages m
                LEFT JOIN itoni_users u ON u.id = CASE WHEN m.sender_id=%s THEN m.receiver_id ELSE m.sender_id END
                LEFT JOIN itoni_listings l ON l.id = m.listing_id
@@ -69,7 +77,8 @@ def handler(event: dict, context) -> dict:
                 'other_name': r[7] or 'Пользователь',
                 'other_photo': r[8],
                 'listing_title': r[9],
-                'listing_image': (list(r[10])[0] if r[10] else None)
+                'listing_image': (list(r[10])[0] if r[10] else None),
+                'other_last_activity': r[11].isoformat() if r[11] else None
             })
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'chats': chats})}
 
@@ -134,7 +143,7 @@ def handler(event: dict, context) -> dict:
         conn.commit()
 
         cur.execute(
-            "SELECT id, name, photo, phone FROM itoni_users WHERE id=%s",
+            "SELECT id, name, photo, phone, last_activity FROM itoni_users WHERE id=%s",
             (other_id,)
         )
         other = cur.fetchone()
@@ -156,7 +165,7 @@ def handler(event: dict, context) -> dict:
             'headers': CORS_HEADERS,
             'body': json.dumps({
                 'messages': messages,
-                'other_user': {'id': other[0], 'name': other[1], 'photo': other[2], 'phone': other[3]} if other else None
+                'other_user': {'id': other[0], 'name': other[1], 'photo': other[2], 'phone': other[3], 'last_activity': other[4].isoformat() if other[4] else None} if other else None
             })
         }
 

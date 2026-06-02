@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { api, Message, formatDate } from '@/lib/api';
+import { api, Message, formatDate, formatOnlineStatus } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import Icon from '@/components/ui/icon';
 
@@ -21,7 +21,8 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [otherUser, setOtherUser] = useState<{ name?: string; photo?: string; phone?: string } | null>(null);
+  const [otherUser, setOtherUser] = useState<{ name?: string; photo?: string; phone?: string; last_activity?: string | null } | null>(null);
+  const [, setTick] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,12 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
     const interval = setInterval(loadMessages, 5000);
     return () => clearInterval(interval);
   }, [otherId, listingId]);
+
+  // Перерисовка онлайн-статуса каждые 30 секунд
+  useEffect(() => {
+    const t = setInterval(() => setTick(v => v + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -104,7 +111,15 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
                 {displayName}
                 <Icon name="ChevronRight" size={14} className="text-gray-400 shrink-0" />
               </p>
-              <p className="text-xs text-gray-500 truncate">{listingTitle}</p>
+              {(() => {
+                const st = formatOnlineStatus(otherUser?.last_activity);
+                return (
+                  <p className={`text-xs truncate flex items-center gap-1 ${st.online ? 'text-green-600' : 'text-gray-500'}`}>
+                    {st.online && <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />}
+                    {st.text}
+                  </p>
+                );
+              })()}
             </div>
           </button>
           <div className="relative shrink-0">

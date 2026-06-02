@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, Chat, formatDate } from '@/lib/api';
+import { api, Chat, formatDate, formatOnlineStatus } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -47,7 +47,9 @@ export default function MessagesScreen({ onChatOpen }: Props) {
         </div>
       ) : (
         <div className="py-2 space-y-px">
-          {chats.map(chat => (
+          {chats.map(chat => {
+            const status = formatOnlineStatus(chat.other_last_activity);
+            return (
             <button
               key={`${chat.other_user_id}-${chat.listing_id}`}
               onClick={() => onChatOpen(chat)}
@@ -62,6 +64,9 @@ export default function MessagesScreen({ onChatOpen }: Props) {
                     <Icon name="User" size={22} className="text-itoni-blue" />
                   )}
                 </div>
+                {status.online && (
+                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white" />
+                )}
                 {!chat.is_read && (
                   <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white" />
                 )}
@@ -75,6 +80,9 @@ export default function MessagesScreen({ onChatOpen }: Props) {
                   </p>
                   <span className="text-[11px] text-gray-400 shrink-0 ml-2">{formatDate(chat.created_at)}</span>
                 </div>
+                <p className={`text-[11px] truncate mb-0.5 ${status.online ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
+                  {status.text}
+                </p>
                 <p className="text-xs text-gray-500 truncate mb-0.5">{chat.listing_title}</p>
                 <p className={`text-sm truncate ${!chat.is_read ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
                   {chat.last_message}
@@ -91,7 +99,8 @@ export default function MessagesScreen({ onChatOpen }: Props) {
                 />
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

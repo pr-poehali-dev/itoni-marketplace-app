@@ -136,6 +136,7 @@ export type Listing = {
   region: string;
   images: string[];
   views: number;
+  favorites_count?: number;
   created_at: string;
   seller_name: string;
   seller_phone: string;
@@ -189,6 +190,7 @@ export type Chat = {
   other_photo?: string;
   listing_title: string;
   listing_image?: string;
+  other_last_activity?: string | null;
 };
 
 export const CATEGORIES = [
@@ -206,9 +208,16 @@ export function formatPrice(price: number): string {
   return new Intl.NumberFormat('ru-RU').format(price) + ' ₽';
 }
 
+// Бэкенд хранит время в UTC без таймзоны — добавляем Z для корректного парсинга
+function parseServerDate(dateStr: string): Date {
+  if (!dateStr) return new Date(NaN);
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(dateStr);
+  return new Date(hasTz ? dateStr : dateStr + 'Z');
+}
+
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d = parseServerDate(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
@@ -219,4 +228,58 @@ export function formatDate(dateStr: string): string {
   if (diffH < 24) return `${diffH} ч. назад`;
   if (diffD < 7) return `${diffD} д. назад`;
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+// Относительное время для ленты: «сегодня», «вчера», «3 дня назад»
+function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+export function formatRelativeDay(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = parseServerDate(dateStr);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86400000);
+  if (diffDays <= 0) return 'сегодня';
+  if (diffDays === 1) return 'вчера';
+  if (diffDays < 7) return `${diffDays} ${plural(diffDays, 'день', 'дня', 'дней')} назад`;
+  if (diffDays < 30) {
+    const w = Math.floor(diffDays / 7);
+    return `${w} ${plural(w, 'неделю', 'недели', 'недель')} назад`;
+  }
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Полная дата и время: «02.06.2026 в 15:30»
+export function formatDateTime(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = parseServerDate(dateStr);
+  const date = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `${date} в ${time}`;
+}
+
+// Онлайн-статус по last_activity
+export function formatOnlineStatus(lastActivity?: string | null): { online: boolean; text: string } {
+  if (!lastActivity) return { online: false, text: 'был(а) в сети давно' };
+  const d = parseServerDate(lastActivity);
+  const now = new Date();
+  const diffMin = Math.floor((now.getTime() - d.getTime()) / 60000);
+  if (diffMin < 5) return { online: true, text: 'онлайн' };
+  if (diffMin < 60) return { online: false, text: `был(а) ${diffMin} мин. назад` };
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86400000);
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const diffH = Math.floor(diffMin / 60);
+  if (diffDays <= 0) return { online: false, text: `был(а) ${diffH} ${plural(diffH, 'час', 'часа', 'часов')} назад` };
+  if (diffDays === 1) return { online: false, text: `был(а) вчера в ${time}` };
+  if (diffDays < 7) return { online: false, text: `был(а) ${diffDays} ${plural(diffDays, 'день', 'дня', 'дней')} назад` };
+  return { online: false, text: `был(а) ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}` };
 }

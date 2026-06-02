@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, Listing, CATEGORIES, formatPrice, formatDate } from '@/lib/api';
+import { api, Listing, CATEGORIES, formatPrice, formatDateTime } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import ReportModal from '@/components/ReportModal';
 import Icon from '@/components/ui/icon';
@@ -178,7 +178,7 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
           </div>
           <h1 className="text-xl font-extrabold text-gray-900 mb-2">{listing.title}</h1>
           <p className="text-3xl font-extrabold text-itoni-blue">{formatPrice(listing.price)}</p>
-          <p className="text-xs text-gray-400 mt-1">{formatDate(listing.created_at)}</p>
+          <p className="text-xs text-gray-400 mt-1">Опубликовано: {formatDateTime(listing.created_at)}</p>
         </div>
 
         {/* Specs */}
