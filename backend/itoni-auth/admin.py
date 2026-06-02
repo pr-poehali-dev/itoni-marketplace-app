@@ -126,6 +126,10 @@ def handle_admin(action, event, body, conn, cur):
         if not ids:
             return _resp(400, {'error': 'Не выбраны объявления'})
         ids = [int(i) for i in ids]
+        cur.execute("DELETE FROM itoni_messages WHERE listing_id = ANY(%s)", (ids,))
+        cur.execute("DELETE FROM itoni_favorites WHERE listing_id = ANY(%s)", (ids,))
+        cur.execute("DELETE FROM itoni_notifications WHERE listing_id = ANY(%s)", (ids,))
+        cur.execute("DELETE FROM itoni_reports WHERE listing_id = ANY(%s)", (ids,))
         cur.execute("DELETE FROM itoni_listings WHERE id = ANY(%s)", (ids,))
         _log(cur, f'Удалил объявления: {ids}')
         conn.commit()

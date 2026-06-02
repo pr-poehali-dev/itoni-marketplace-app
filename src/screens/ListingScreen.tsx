@@ -90,7 +90,7 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
     <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="text-center text-gray-400">
         <div className="text-4xl mb-2">😕</div>
-        <p>Объявление не найдено</p>
+        <p>Объявление удалено</p>
         <button onClick={onBack} className="mt-4 text-itoni-blue text-sm">Назад</button>
       </div>
     </div>

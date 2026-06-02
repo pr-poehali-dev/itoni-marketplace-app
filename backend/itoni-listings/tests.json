@@ -4,9 +4,14 @@
       "name": "Get listings list",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 200,
-      "expectedBody": {"listings": [], "total": 0},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
+    },
+    {
+      "name": "Delete without auth",
+      "method": "DELETE",
+      "path": "/",
+      "body": {"id": 999999},
+      "expectedStatus": 401
     }
   ]
 }

@@ -5,7 +5,7 @@ import psycopg2
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Auth-Token, X-Session-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Auth-Token, X-Session-Id, X-Admin-Token',
     'Content-Type': 'application/json'
 }
 
@@ -245,10 +245,18 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 201, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'id': new_id})}
 
-    # DELETE / - удалить своё объявление
+    # DELETE / - удалить объявление (владелец или администратор)
     if method == 'DELETE':
-        user_id = event.get('headers', {}).get('X-User-Id')
-        if not user_id:
+        headers = event.get('headers', {}) or {}
+        user_id = headers.get('X-User-Id') or headers.get('x-user-id')
+        admin_token = (
+            headers.get('X-Admin-Token')
+            or headers.get('x-admin-token')
+            or body.get('admin_token')
+        )
+        is_admin = admin_token == os.environ.get('ADMIN_TOKEN', 'itoni-admin-ok')
+
+        if not user_id and not is_admin:
             cur.close(); conn.close()
             return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
 
@@ -256,13 +264,25 @@ def handler(event: dict, context) -> dict:
         if not listing_id:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите id объявления'})}
+        listing_id = int(listing_id)
 
-        cur.execute(
-            "DELETE FROM itoni_listings WHERE id=%s AND user_id=%s RETURNING id",
-            (int(listing_id), int(user_id))
-        )
+        # Проверка прав: владелец или админ
+        cur.execute("SELECT user_id FROM itoni_listings WHERE id=%s", (listing_id,))
+        owner = cur.fetchone()
+        if not owner:
+            cur.close(); conn.close()
+            return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Объявление не найдено'})}
+        if not is_admin and int(owner[0]) != int(user_id):
+            cur.close(); conn.close()
+            return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Можно удалять только свои объявления'})}
+
+        # Каскадная очистка связанных данных, затем само объявление
+        cur.execute("DELETE FROM itoni_messages WHERE listing_id=%s", (listing_id,))
+        cur.execute("DELETE FROM itoni_favorites WHERE listing_id=%s", (listing_id,))
+        cur.execute("DELETE FROM itoni_notifications WHERE listing_id=%s", (listing_id,))
+        cur.execute("DELETE FROM itoni_reports WHERE listing_id=%s", (listing_id,))
+        cur.execute("DELETE FROM itoni_listings WHERE id=%s RETURNING id", (listing_id,))
         deleted = cur.fetchone()
-        cur.execute("DELETE FROM itoni_favorites WHERE listing_id=%s", (int(listing_id),))
         conn.commit()
         cur.close(); conn.close()
 

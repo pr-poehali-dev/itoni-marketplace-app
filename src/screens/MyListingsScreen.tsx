@@ -16,7 +16,13 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const user = getUser();
+
+  function showNotice(type: 'success' | 'error', text: string) {
+    setNotice({ type, text });
+    setTimeout(() => setNotice(null), 2500);
+  }
 
   useEffect(() => {
     if (user) {
@@ -29,16 +35,32 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
 
   async function handleDelete(id: number) {
     setDeletingId(id);
-    const res = await api.deleteListing(id);
-    setDeletingId(null);
-    setConfirmId(null);
-    if (res.success) {
-      setListings(prev => prev.filter(l => l.id !== id));
+    try {
+      const res = await api.deleteListing(id);
+      if (res.success) {
+        setListings(prev => prev.filter(l => l.id !== id));
+        setConfirmId(null);
+        showNotice('success', 'Объявление удалено');
+      } else {
+        showNotice('error', res.error || 'Ошибка при удалении');
+      }
+    } catch {
+      showNotice('error', 'Ошибка при удалении');
+    } finally {
+      setDeletingId(null);
     }
   }
 
   return (
     <div className="pb-nav bg-gray-50 min-h-screen">
+      {notice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] animate-fade-in">
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg ${notice.type === 'success' ? 'bg-green-600' : 'bg-red-500'}`}>
+            <Icon name={notice.type === 'success' ? 'CheckCircle2' : 'AlertCircle'} size={16} />
+            {notice.text}
+          </div>
+        </div>
+      )}
       <div className="bg-white px-4 pt-12 pb-4 border-b border-gray-100 sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
@@ -118,7 +140,7 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
               <Icon name="Trash2" size={26} className="text-red-500" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 text-center mb-2">Удалить объявление?</h3>
-            <p className="text-sm text-gray-500 text-center mb-6">Объявление будет удалено без возможности восстановления.</p>
+            <p className="text-sm text-gray-500 text-center mb-6">Отменить будет нельзя.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmId(null)}
