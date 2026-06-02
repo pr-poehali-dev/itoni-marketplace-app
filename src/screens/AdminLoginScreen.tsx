@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { adminApi, setAdminToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
@@ -13,15 +13,20 @@ export default function AdminLoginScreen({ onBack, onSuccess }: Props) {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passRef = useRef<HTMLInputElement>(null);
 
   async function handleLogin() {
-    if (!email || !password) {
+    // Берём значения из DOM (важно для автозаполнения браузера)
+    const emailVal = (emailRef.current?.value ?? email).trim();
+    const passVal = (passRef.current?.value ?? password).trim();
+    if (!emailVal || !passVal) {
       setError('Введите email и пароль');
       return;
     }
     setLoading(true);
     setError('');
-    const res = await adminApi.login(email.trim(), password.trim());
+    const res = await adminApi.login(emailVal, passVal);
     setLoading(false);
     if (res.success && res.token) {
       setAdminToken(res.token);
@@ -50,6 +55,7 @@ export default function AdminLoginScreen({ onBack, onSuccess }: Props) {
 
         <div className="space-y-3">
           <input
+            ref={emailRef}
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
@@ -61,6 +67,7 @@ export default function AdminLoginScreen({ onBack, onSuccess }: Props) {
           />
           <div className="relative">
             <input
+              ref={passRef}
               type={showPw ? 'text' : 'password'}
               value={password}
               onChange={e => setPassword(e.target.value)}
