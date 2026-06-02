@@ -245,6 +245,46 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 201, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'id': new_id})}
 
+    # PUT / - редактировать своё объявление (название, цена, описание)
+    if method == 'PUT':
+        headers = event.get('headers', {}) or {}
+        user_id = headers.get('X-User-Id') or headers.get('x-user-id')
+        if not user_id:
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        listing_id = body.get('id')
+        if not listing_id:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите id объявления'})}
+        listing_id = int(listing_id)
+
+        cur.execute("SELECT user_id FROM itoni_listings WHERE id=%s", (listing_id,))
+        owner = cur.fetchone()
+        if not owner:
+            cur.close(); conn.close()
+            return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Объявление не найдено'})}
+        if int(owner[0]) != int(user_id):
+            cur.close(); conn.close()
+            return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Можно редактировать только свои объявления'})}
+
+        title = (body.get('title') or '').strip()
+        price = body.get('price')
+        if not title:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите название'})}
+        if price is None or int(price) <= 0:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите корректную цену'})}
+
+        cur.execute(
+            "UPDATE itoni_listings SET title=%s, price=%s, description=%s WHERE id=%s",
+            (title, int(price), body.get('description'), listing_id)
+        )
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
     # DELETE / - удалить объявление (владелец или администратор)
     if method == 'DELETE':
         headers = event.get('headers', {}) or {}

@@ -7,11 +7,12 @@ interface Props {
   onBack: () => void;
   onListingClick: (id: number) => void;
   onCreateNew: () => void;
+  onEdit: (id: number) => void;
 }
 
 const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
 
-export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }: Props) {
+export default function MyListingsScreen({ onBack, onListingClick, onCreateNew, onEdit }: Props) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<number | null>(null);
@@ -111,6 +112,13 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew }
                 </button>
               </div>
               <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+                <button
+                  onClick={() => onEdit(l.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-itoni-blue text-sm font-medium py-2 rounded-xl bg-blue-50 active:bg-blue-100"
+                >
+                  <Icon name="Pencil" size={15} />
+                  Изменить
+                </button>
                 <button
                   onClick={() => onListingClick(l.id)}
                   className="flex-1 flex items-center justify-center gap-1.5 text-gray-600 text-sm font-medium py-2 rounded-xl bg-gray-50 active:bg-gray-100"

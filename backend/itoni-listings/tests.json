@@ -12,6 +12,13 @@
       "path": "/",
       "body": {"id": 999999},
       "expectedStatus": 401
+    },
+    {
+      "name": "Update without auth",
+      "method": "PUT",
+      "path": "/",
+      "body": {"id": 999999, "title": "x", "price": 1},
+      "expectedStatus": 401
     }
   ]
 }

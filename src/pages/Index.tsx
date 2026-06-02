@@ -7,6 +7,7 @@ import AuthScreen from '@/screens/AuthScreen';
 import HomeScreen from '@/screens/HomeScreen';
 import SearchScreen from '@/screens/SearchScreen';
 import CreateScreen from '@/screens/CreateScreen';
+import EditScreen from '@/screens/EditScreen';
 import ListingScreen from '@/screens/ListingScreen';
 import MessagesScreen from '@/screens/MessagesScreen';
 import ChatScreen from '@/screens/ChatScreen';
@@ -30,6 +31,7 @@ type Screen =
   | { name: 'home' }
   | { name: 'search'; category?: string }
   | { name: 'create' }
+  | { name: 'edit'; id: number }
   | { name: 'listing'; id: number }
   | { name: 'chat'; otherId: number; listingId: number; listingTitle: string; listingImage?: string; otherName?: string }
   | { name: 'seller'; sellerId: number; sellerName?: string; sellerPhoto?: string; sellerPhone?: string }
@@ -265,6 +267,14 @@ export default function Index() {
         />
       )}
 
+      {screen.name === 'edit' && (
+        <EditScreen
+          listingId={screen.id}
+          onSaved={() => navigate({ name: 'mylistings' })}
+          onCancel={() => navigate({ name: 'mylistings' })}
+        />
+      )}
+
       {screen.name === 'listing' && (
         <ListingScreen
           listingId={screen.id}
@@ -378,6 +388,7 @@ export default function Index() {
           onBack={() => navigate({ name: 'profile' })}
           onListingClick={handleListingClick}
           onCreateNew={() => navigate({ name: 'create' })}
+          onEdit={(id) => navigate({ name: 'edit', id })}
         />
       )}
 

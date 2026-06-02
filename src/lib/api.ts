@@ -50,6 +50,9 @@ export const api = {
   deleteListing: (id: number) =>
     fetch(URLS.listings, { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ id }) }).then(r => r.json()),
 
+  updateListing: (id: number, data: { title: string; price: number; description?: string }) =>
+    fetch(URLS.listings, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id, ...data }) }).then(r => r.json()),
+
   // Listings
   getListings: (params: Record<string, string | number> = {}) => {
     const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
