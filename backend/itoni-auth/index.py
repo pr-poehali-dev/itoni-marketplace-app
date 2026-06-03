@@ -92,7 +92,12 @@ def send_call_code(phone: str):
         return False, None, 'Сервис звонков временно недоступен'
     if data.get('status') == 'OK':
         return True, str(data.get('code', '')), None
-    return False, None, data.get('status_text') or 'Не удалось совершить звонок'
+    # Частые ошибки SMS.RU при звонке-авторизации
+    code_err = data.get('status_code')
+    text = data.get('status_text') or ''
+    if code_err == 502 or 'слишком часто' in text.lower():
+        return False, None, 'Звонок уже отправлен. Дождитесь входящего вызова, не запрашивайте повторно слишком часто.'
+    return False, None, text or 'Не удалось совершить звонок'
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
