@@ -26,6 +26,7 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [hint, setHint] = useState('');
   const [showTerms, setShowTerms] = useState(false);
 
   const fullPhone = '+7' + digits;
@@ -43,8 +44,10 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
     try {
       const res = await api.sendSmsCode(fullPhone);
       setLoading(false);
-      if (res.success) setStep('code');
-      else setError(res.error || 'Не удалось отправить код');
+      if (res.success) {
+        setHint(res.message || '');
+        setStep('code');
+      } else setError(res.error || 'Не удалось отправить код');
     } catch {
       setLoading(false);
       setError('Ошибка соединения. Попробуйте снова.');
@@ -135,7 +138,7 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
         ) : (
           <div className="animate-slide-up">
             <h2 className="text-2xl font-bold text-white text-center mb-1">Введите код</h2>
-            <p className="text-gray-400 text-sm text-center mb-5">Сейчас поступит звонок на {formatPhone(digits)}. Код — последние 4 цифры этого номера</p>
+            <p className="text-gray-400 text-sm text-center mb-5">{hint || `Сейчас поступит звонок на ${formatPhone(digits)}. Код — последние 4 цифры этого номера`}</p>
 
             <div className="flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-blue-500 transition-colors">
               <Icon name="KeyRound" size={20} className="text-gray-400" />
