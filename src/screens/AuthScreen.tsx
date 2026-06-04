@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { saveUser } from '@/lib/auth';
 import TermsAcceptScreen from '@/screens/TermsAcceptScreen';
@@ -6,11 +6,9 @@ import Icon from '@/components/ui/icon';
 
 interface Props {
   onAuth: () => void;
-  onAdmin?: () => void;
 }
 
 function formatPhone(digits: string): string {
-  // digits — только цифры без кода страны (до 10 знаков)
   const d = digits.slice(0, 10);
   let out = '+7';
   if (d.length > 0) out += ' ' + d.slice(0, 3);
@@ -20,16 +18,35 @@ function formatPhone(digits: string): string {
   return out;
 }
 
-export default function AuthScreen({ onAuth, onAdmin }: Props) {
+export default function AuthScreen({ onAuth }: Props) {
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [digits, setDigits] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [showTerms, setShowTerms] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fullPhone = '+7' + digits;
+
+  function startResendTimer() {
+    setResendIn(30);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setResendIn(prev => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
   function handlePhoneInput(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/\D/g, '');
@@ -47,9 +64,26 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
       if (res.success) {
         setHint(res.message || '');
         setStep('code');
+        startResendTimer();
       } else setError(res.error || 'Не удалось отправить код');
     } catch {
       setLoading(false);
+      setError('Ошибка соединения. Попробуйте снова.');
+    }
+  }
+
+  async function handleResend() {
+    if (resendIn > 0 || resending) return;
+    setResending(true); setError(''); setCode('');
+    try {
+      const res = await api.sendSmsCode(fullPhone);
+      setResending(false);
+      if (res.success) {
+        setHint(res.message || '');
+        startResendTimer();
+      } else setError(res.error || 'Не удалось позвонить повторно');
+    } catch {
+      setResending(false);
       setError('Ошибка соединения. Попробуйте снова.');
     }
   }
@@ -76,16 +110,11 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
   if (showTerms) return <TermsAcceptScreen onAccepted={onAuth} />;
 
   return (
-    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-      {onAdmin && (
-        <button
-          onClick={onAdmin}
-          className="absolute top-4 right-4 z-20 flex items-center gap-1 text-gray-500 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white/5 active:bg-white/10"
-        >
-          <Icon name="ShieldCheck" size={13} />
-          Админ
-        </button>
-      )}
+    <div className="min-h-screen bg-[#0F172A] flex flex-col relative overflow-hidden">
+      {/* Decorative gradients */}
+      <div className="absolute -top-32 -left-24 w-80 h-80 bg-itoni-blue/30 blur-[120px] rounded-full" />
+      <div className="absolute -bottom-32 -right-24 w-80 h-80 bg-itoni-orange/20 blur-[120px] rounded-full" />
+
       <div className="relative flex-1 flex flex-col items-center justify-center pt-14 px-6">
         <div className="text-center z-10 animate-fade-in">
           <span className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-clip-text text-transparent" style={{ fontFamily: 'Golos Text' }}>
@@ -106,72 +135,100 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
         </div>
       </div>
 
-      <div className="relative z-10 px-6 pb-10">
-        {step === 'phone' ? (
-          <div className="animate-slide-up">
-            <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
-            <p className="text-gray-400 text-sm text-center mb-5">Мы позвоним — код это последние 4 цифры номера звонка</p>
+      <div className="relative z-10 px-5 pb-10">
+        {/* Card */}
+        <div className="w-full max-w-sm mx-auto bg-[#1E293B] border border-white/10 rounded-[24px] p-6 shadow-2xl animate-slide-up">
+          {step === 'phone' ? (
+            <>
+              <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
+              <p className="text-gray-400 text-sm text-center mb-5">Введите номер телефона — мы позвоним и продиктуем код</p>
 
-            <div className="flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-blue-500 transition-colors">
-              <Icon name="Phone" size={20} className="text-gray-400" />
-              <input
-                type="tel"
-                inputMode="numeric"
-                value={formatPhone(digits)}
-                onChange={handlePhoneInput}
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
-                placeholder="+7 999 999-99-99"
-                className="flex-1 bg-transparent text-base text-white placeholder-gray-500 focus:outline-none"
-              />
-            </div>
+              <div className="flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-itoni-blue transition-colors">
+                <span className="text-gray-300 text-base font-semibold">+7</span>
+                <div className="w-px h-5 bg-white/15" />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={formatPhone(digits).replace(/^\+7\s?/, '')}
+                  onChange={handlePhoneInput}
+                  onKeyDown={e => e.key === 'Enter' && handleSend()}
+                  placeholder="999 999-99-99"
+                  className="flex-1 bg-transparent text-base text-white placeholder-gray-500 focus:outline-none"
+                />
+              </div>
 
-            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+              {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
 
-            <button
-              onClick={handleSend}
-              disabled={loading}
-              className="w-full bg-itoni-blue text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/30"
-            >
-              {loading ? 'Звоним...' : 'Получить код звонком'}
-            </button>
-          </div>
-        ) : (
-          <div className="animate-slide-up">
-            <h2 className="text-2xl font-bold text-white text-center mb-1">Введите код</h2>
-            <p className="text-gray-400 text-sm text-center mb-5">{hint || `Сейчас поступит звонок на ${formatPhone(digits)}. Код — последние 4 цифры этого номера`}</p>
+              <button
+                onClick={handleSend}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-itoni-blue to-blue-500 text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.97] shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+              >
+                {loading && <Icon name="LoaderCircle" size={18} className="animate-spin" />}
+                {loading ? 'Звоним...' : 'Получить код'}
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold text-white text-center mb-1">Введите код</h2>
 
-            <div className="flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-blue-500 transition-colors">
-              <Icon name="KeyRound" size={20} className="text-gray-400" />
-              <input
-                type="tel"
-                inputMode="numeric"
-                value={code}
-                onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                onKeyDown={e => e.key === 'Enter' && handleVerify()}
-                placeholder="4-значный код"
-                autoFocus
-                className="flex-1 bg-transparent text-base text-white placeholder-gray-500 focus:outline-none tracking-[0.4em]"
-              />
-            </div>
+              {/* Инструкция */}
+              <div className="flex items-start gap-2 bg-itoni-blue/10 border border-itoni-blue/20 rounded-2xl p-3 mb-4">
+                <Icon name="PhoneCall" size={18} className="text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-gray-300 text-xs leading-relaxed">
+                  {hint || 'Сейчас вам позвонит робот. Ответьте и введите 4 цифры номера, с которого поступит звонок.'}
+                </p>
+              </div>
 
-            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+              <div className="flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-itoni-blue transition-colors">
+                <Icon name="KeyRound" size={20} className="text-gray-400" />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={code}
+                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onKeyDown={e => e.key === 'Enter' && handleVerify()}
+                  placeholder="4-значный код"
+                  autoFocus
+                  className="flex-1 bg-transparent text-base text-white placeholder-gray-500 focus:outline-none tracking-[0.4em]"
+                />
+              </div>
 
-            <button
-              onClick={handleVerify}
-              disabled={loading}
-              className="w-full bg-itoni-blue text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/30"
-            >
-              {loading ? 'Проверяем...' : 'Войти'}
-            </button>
+              {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
 
-            <button
-              onClick={() => { setStep('phone'); setCode(''); setError(''); }}
-              className="w-full text-gray-400 text-sm py-3"
-            >
-              Изменить номер
-            </button>
-          </div>
-        )}
+              <button
+                onClick={handleVerify}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-itoni-blue to-blue-500 text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.97] shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+              >
+                {loading && <Icon name="LoaderCircle" size={18} className="animate-spin" />}
+                {loading ? 'Проверяем...' : 'Войти'}
+              </button>
+
+              {/* Позвонить ещё раз */}
+              <button
+                onClick={handleResend}
+                disabled={resendIn > 0 || resending}
+                className="w-full text-sm py-3 mt-1 flex items-center justify-center gap-2 disabled:text-gray-500 text-blue-400 font-medium"
+              >
+                {resending ? (
+                  <><Icon name="LoaderCircle" size={15} className="animate-spin" /> Звоним...</>
+                ) : resendIn > 0 ? (
+                  `Позвонить ещё раз через ${resendIn} с`
+                ) : (
+                  <><Icon name="RefreshCw" size={15} /> Позвонить ещё раз</>
+                )}
+              </button>
+
+              <button
+                onClick={() => { setStep('phone'); setCode(''); setError(''); }}
+                className="w-full text-gray-400 text-sm py-2"
+              >
+                Изменить номер
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

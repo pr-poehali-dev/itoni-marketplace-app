@@ -19,12 +19,9 @@ import SecurityScreen from '@/screens/SecurityScreen';
 import SupportScreen from '@/screens/SupportScreen';
 import NotificationSettingsScreen from '@/screens/NotificationSettingsScreen';
 import NotificationsScreen from '@/screens/NotificationsScreen';
-import AdminLoginScreen from '@/screens/AdminLoginScreen';
-import AdminPanelScreen from '@/screens/AdminPanelScreen';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import MessageToast, { ToastData } from '@/components/MessageToast';
 import { clearUser } from '@/lib/auth';
-import { getAdminToken, clearAdminToken } from '@/lib/adminApi';
 import { applyTheme, getTheme } from '@/lib/theme';
 
 type Screen =
@@ -42,9 +39,7 @@ type Screen =
   | { name: 'security' }
   | { name: 'support' }
   | { name: 'notification-settings' }
-  | { name: 'notifications' }
-  | { name: 'admin-login' }
-  | { name: 'admin-panel' };
+  | { name: 'notifications' };
 
 const tabToScreen: Record<Tab, Screen> = {
   home: { name: 'home' },
@@ -56,9 +51,6 @@ const tabToScreen: Record<Tab, Screen> = {
 
 function getInitialScreen(): Screen {
   const params = new URLSearchParams(window.location.search);
-  if (window.location.pathname === '/admin' || params.has('admin')) {
-    return getAdminToken() ? { name: 'admin-panel' } : { name: 'admin-login' };
-  }
   const id = params.get('id');
   if (window.location.pathname === '/listing' && id && !isNaN(Number(id))) {
     return { name: 'listing', id: Number(id) };
@@ -68,7 +60,6 @@ function getInitialScreen(): Screen {
 
 export default function Index() {
   const [authed, setAuthed] = useState(!!getUser());
-  const [adminAuthed, setAdminAuthed] = useState(!!getAdminToken());
   const [screen, setScreen] = useState<Screen>(getInitialScreen);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [favorites, setFavorites] = useState<number[]>([]);
@@ -81,13 +72,6 @@ export default function Index() {
   // Применить сохранённую тему при старте
   useEffect(() => {
     applyTheme(getTheme());
-  }, []);
-
-  // Сброс админ-доступа при устаревшей сессии
-  useEffect(() => {
-    const onDenied = () => setAdminAuthed(false);
-    window.addEventListener('admin-access-denied', onDenied);
-    return () => window.removeEventListener('admin-access-denied', onDenied);
   }, []);
 
   // Запись установки приложения один раз
@@ -196,28 +180,7 @@ export default function Index() {
   }
 
   if (!authed) {
-    if (screen.name === 'admin-panel' && adminAuthed) {
-      return (
-        <AdminPanelScreen
-          onExit={() => { clearAdminToken(); setAdminAuthed(false); setScreen({ name: 'admin-login' }); }}
-          onOpenListing={(id) => setScreen({ name: 'listing', id })}
-        />
-      );
-    }
-    if (screen.name === 'admin-login' || screen.name === 'admin-panel') {
-      return (
-        <AdminLoginScreen
-          onBack={() => setScreen({ name: 'home' })}
-          onSuccess={() => { setAdminAuthed(true); setScreen({ name: 'admin-panel' }); }}
-        />
-      );
-    }
-    return (
-      <AuthScreen
-        onAuth={() => setAuthed(true)}
-        onAdmin={() => setScreen({ name: 'admin-login' })}
-      />
-    );
+    return <AuthScreen onAuth={() => setAuthed(true)} />;
   }
 
   function handleAccountGone() {
@@ -226,7 +189,7 @@ export default function Index() {
     setScreen({ name: 'home' });
   }
 
-  const showBottomNav = !['listing', 'chat', 'seller', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications', 'admin-login', 'admin-panel'].includes(screen.name);
+  const showBottomNav = !['listing', 'chat', 'seller', 'create', 'favorites', 'mylistings', 'security', 'support', 'notification-settings', 'notifications'].includes(screen.name);
 
   function handleNotifChat(n: Notification) {
     navigate({
@@ -324,29 +287,7 @@ export default function Index() {
           onSecurity={() => navigate({ name: 'security' })}
           onSupport={() => navigate({ name: 'support' })}
           onNotificationSettings={() => navigate({ name: 'notification-settings' })}
-          onAdmin={() => navigate({ name: 'admin-login' })}
         />
-      )}
-
-      {screen.name === 'admin-login' && (
-        <AdminLoginScreen
-          onBack={() => navigate({ name: 'profile' })}
-          onSuccess={() => { setAdminAuthed(true); navigate({ name: 'admin-panel' }); }}
-        />
-      )}
-
-      {screen.name === 'admin-panel' && (
-        adminAuthed ? (
-          <AdminPanelScreen
-            onExit={() => { clearAdminToken(); setAdminAuthed(false); navigate({ name: 'profile' }); }}
-            onOpenListing={handleListingClick}
-          />
-        ) : (
-          <AdminLoginScreen
-            onBack={() => navigate({ name: 'profile' })}
-            onSuccess={() => { setAdminAuthed(true); navigate({ name: 'admin-panel' }); }}
-          />
-        )
       )}
 
       {screen.name === 'notification-settings' && (

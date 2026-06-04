@@ -69,7 +69,7 @@ def normalize_phone(raw: str) -> str:
     return '+' + digits if digits else ''
 
 
-def send_call_code(phone: str):
+def send_call_code(phone: str, ip: str = ''):
     """Звонок-авторизация SMS.RU (code/call). Код = последние 4 цифры входящего номера.
     Возвращает (ok: bool, code: str|None, error: str|None, called: bool).
     called=False означает, что реального дозвона не было (free_repeat / cost=0)."""
@@ -77,11 +77,14 @@ def send_call_code(phone: str):
     if not api_key:
         return False, None, 'Ключ SMS не настроен', False
     to = phone.lstrip('+')
-    params = urllib.parse.urlencode({
+    query = {
         'api_id': api_key,
         'phone': to,
         'json': 1,
-    })
+    }
+    if ip:
+        query['ip'] = ip
+    params = urllib.parse.urlencode(query)
     url = f'https://sms.ru/code/call?{params}'
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
@@ -103,19 +106,22 @@ def send_call_code(phone: str):
     return False, None, text or 'Не удалось совершить звонок', False
 
 
-def send_sms_code_ru(phone: str, code: str):
+def send_sms_code_ru(phone: str, code: str, ip: str = ''):
     """Фолбэк: отправить код обычной SMS через SMS.RU (sms/send).
     Возвращает (ok: bool, error: str|None)."""
     api_key = (os.environ.get('SMS_API_KEY') or '').strip()
     if not api_key:
         return False, 'Ключ SMS не настроен'
     to = phone.lstrip('+')
-    params = urllib.parse.urlencode({
+    query = {
         'api_id': api_key,
         'to': to,
         'msg': f'Код для входа в иТони: {code}',
         'json': 1,
-    })
+    }
+    if ip:
+        query['ip'] = ip
+    params = urllib.parse.urlencode(query)
     url = f'https://sms.ru/sms/send?{params}'
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
@@ -204,15 +210,18 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
 
-        ok, code, err, called = send_call_code(phone)
+        # IP пользователя для SMS.RU (защита от блокировок и антифрод)
+        user_ip = (event.get('requestContext', {}) or {}).get('identity', {}).get('sourceIp', '') or ''
+
+        ok, code, err, called = send_call_code(phone, user_ip)
 
         delivery = 'call'
-        message = 'Звоним вам. Введите последние 4 цифры номера, с которого поступит звонок.'
+        message = 'Сейчас вам позвонит робот. Ответьте и введите 4 цифры номера, с которого поступит звонок.'
 
         # Фолбэк: если звонок не удался или дозвона по факту не было — шлём SMS со своим кодом
         if not ok or not code or not called:
             sms_code = ''.join(random.choices(string.digits, k=4))
-            sms_ok, sms_err = send_sms_code_ru(phone, sms_code)
+            sms_ok, sms_err = send_sms_code_ru(phone, sms_code, user_ip)
             if sms_ok:
                 code = sms_code
                 delivery = 'sms'
@@ -221,7 +230,7 @@ def handler(event: dict, context) -> dict:
                 cur.close(); conn.close()
                 return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': err or sms_err or 'Не удалось отправить код. Попробуйте позже.'})}
 
-        expires_at = datetime.now() + timedelta(minutes=10)
+        expires_at = datetime.now() + timedelta(minutes=3)
         cur.execute("INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s, %s, %s)", (phone, code.strip(), expires_at))
         conn.commit()
         cur.close(); conn.close()

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { getUser, saveUser, clearUser } from '@/lib/auth';
+import { getTheme, toggleTheme, type Theme } from '@/lib/theme';
 import RegionPicker from '@/components/RegionPicker';
 import Icon from '@/components/ui/icon';
 
@@ -11,11 +12,11 @@ interface Props {
   onSecurity: () => void;
   onSupport: () => void;
   onNotificationSettings: () => void;
-  onAdmin: () => void;
 }
 
-export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onSecurity, onSupport, onNotificationSettings, onAdmin }: Props) {
+export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onSecurity, onSupport, onNotificationSettings }: Props) {
   const [user, setUser] = useState(getUser());
+  const [theme, setTheme] = useState<Theme>(getTheme());
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [city, setCity] = useState(user?.city || '');
@@ -106,12 +107,21 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onS
       <div className="bg-white px-4 pt-12 pb-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-extrabold text-gray-900">Профиль</h1>
-          <button
-            onClick={() => setEditing(!editing)}
-            className={`text-sm font-medium ${editing ? 'text-gray-500' : 'text-itoni-blue'}`}
-          >
-            {editing ? 'Отмена' : 'Изменить'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setTheme(toggleTheme())}
+              className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center active:scale-95 transition-transform"
+              aria-label="Сменить тему"
+            >
+              <Icon name={theme === 'dark' ? 'Sun' : 'Moon'} size={18} className="text-itoni-orange" />
+            </button>
+            <button
+              onClick={() => setEditing(!editing)}
+              className={`text-sm font-medium ${editing ? 'text-gray-500' : 'text-itoni-blue'}`}
+            >
+              {editing ? 'Отмена' : 'Изменить'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -249,15 +259,6 @@ export default function ProfileScreen({ onLogout, onMyListings, onFavorites, onS
         >
           <Icon name="LogOut" size={18} />
           Выйти из аккаунта
-        </button>
-
-        {/* Admin entry — вход защищён паролем */}
-        <button
-          onClick={onAdmin}
-          className="w-full text-gray-400 text-xs font-medium py-3 flex items-center justify-center gap-1.5"
-        >
-          <Icon name="ShieldCheck" size={14} />
-          Админ-панель
         </button>
 
       </div>
