@@ -56,7 +56,7 @@ def handler(event: dict, context) -> dict:
 
     s3.put_object(Bucket='files', Key=key, Body=image_bytes, ContentType=content_type)
 
-    url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/files/{key}"
+    url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
     return {
         'statusCode': 200,
