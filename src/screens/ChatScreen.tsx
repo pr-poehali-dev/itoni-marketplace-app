@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { api, Message, formatDate, formatOnlineStatus } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import ListingImage from '@/components/ListingImage';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -13,8 +14,6 @@ interface Props {
   onOpenSeller?: (name?: string, photo?: string, phone?: string) => void;
   onChatDeleted?: () => void;
 }
-
-const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
 
 export default function ChatScreen({ otherId, listingId, listingTitle, listingImage, otherName, onBack, onOpenSeller, onChatDeleted }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -142,12 +141,7 @@ export default function ChatScreen({ otherId, listingId, listingTitle, listingIm
 
         {/* Listing preview */}
         <div className="mt-2 flex items-center gap-3 bg-gray-50 rounded-xl p-2">
-          <img
-            src={listingImage || PLACEHOLDER}
-            alt=""
-            className="w-12 h-10 rounded-lg object-cover"
-            onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
-          />
+          <ListingImage src={listingImage} alt="" className="w-12 h-10 rounded-lg object-cover" iconSize={16} />
           <p className="text-xs text-gray-600 font-medium flex-1 line-clamp-2">{listingTitle}</p>
         </div>
       </div>

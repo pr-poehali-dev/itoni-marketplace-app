@@ -32,23 +32,31 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
     if (!files.length) return;
     e.target.value = '';
     setUploadingPhotos(true);
+    setError('');
 
-    const uploaded: string[] = [];
+    let failed = 0;
     for (const file of files) {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = ev => resolve(ev.target?.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const res = await api.uploadImage(base64, file.type);
-      if (res.url) {
-        uploaded.push(res.url);
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const res = await api.uploadImage(base64, file.type);
+        if (res.url) {
+          // Добавляем каждое фото сразу, чтобы ничего не потерять при сбое следующего
+          setImages(prev => (prev.length < 10 ? [...prev, res.url] : prev));
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
       }
     }
 
-    if (uploaded.length > 0) {
-      setImages(prev => [...prev, ...uploaded]);
+    if (failed > 0) {
+      setError(`Не удалось загрузить ${failed} фото. Попробуйте добавить их ещё раз.`);
     }
     setUploadingPhotos(false);
   }
@@ -140,6 +148,9 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
             </div>
             {images.length > 0 && (
               <p className="text-xs text-gray-400 text-center mb-3">Загружено {images.length} фото на сервер ✓</p>
+            )}
+            {error && step === 0 && (
+              <p className="text-xs text-red-500 text-center mb-3">{error}</p>
             )}
             <button
               onClick={() => setStep(1)}

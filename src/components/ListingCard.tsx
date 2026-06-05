@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Heart } from 'lucide-react';
 import { Listing, formatPrice, formatRelativeDay, CATEGORIES } from '@/lib/api';
 import Icon from '@/components/ui/icon';
+import ListingImage from '@/components/ListingImage';
 
 interface Props {
   listing: Listing | {
@@ -16,11 +17,9 @@ interface Props {
   compact?: boolean;
 }
 
-const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
-
 export default function ListingCard({ listing, isFavorite, onFavoriteToggle, onClick, compact }: Props) {
   const cat = CATEGORIES.find(c => c.id === listing.category);
-  const img = listing.images?.[0] || PLACEHOLDER;
+  const img = listing.images?.[0];
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -57,11 +56,11 @@ export default function ListingCard({ listing, isFavorite, onFavoriteToggle, onC
       className="bg-white rounded-2xl card-shadow overflow-hidden cursor-pointer active:scale-[0.98] transition-all duration-150"
     >
       <div className="relative">
-        <img
+        <ListingImage
           src={img}
           alt={listing.title}
           className={`w-full object-cover ${compact ? 'h-36' : 'h-48'}`}
-          onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
+          iconSize={36}
         />
         <div className="absolute top-2 left-2">
           <span className="bg-black/60 text-white text-xs px-2 py-1 rounded-lg font-medium">

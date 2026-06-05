@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, Listing, CATEGORIES, formatPrice, formatDateTime } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import ReportModal from '@/components/ReportModal';
+import ListingImage from '@/components/ListingImage';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -11,8 +12,6 @@ interface Props {
   favorites: number[];
   onFavoriteToggle: (id: number) => void;
 }
-
-const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
 
 export default function ListingScreen({ listingId, onBack, onChat, favorites, onFavoriteToggle }: Props) {
   const [listing, setListing] = useState<Listing | null>(null);
@@ -96,7 +95,7 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
     </div>
   );
 
-  const images = listing.images?.length ? listing.images : [PLACEHOLDER];
+  const images = listing.images?.length ? listing.images : [];
   const cat = CATEGORIES.find(c => c.id === listing.category);
   const isFav = favorites.includes(listing.id);
   const isOwner = user?.id === listing.user_id;
@@ -127,11 +126,11 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
           <Icon name="Heart" size={18} className="text-white" />
         </button>
 
-        <img
+        <ListingImage
           src={images[imgIndex]}
           alt={listing.title}
           className="w-full h-72 object-cover"
-          onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
+          iconSize={48}
         />
 
         {images.length > 1 && (
@@ -158,7 +157,7 @@ export default function ListingScreen({ listingId, onBack, onChat, favorites, on
         <div className="bg-white px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
           {images.map((img, i) => (
             <button key={i} onClick={() => setImgIndex(i)} className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${i === imgIndex ? 'border-itoni-blue' : 'border-transparent'}`}>
-              <img src={img} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }} />
+              <ListingImage src={img} alt="" className="w-full h-full object-cover" iconSize={18} />
             </button>
           ))}
         </div>

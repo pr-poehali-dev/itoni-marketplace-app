@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, Listing, formatPrice, formatDate } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import ListingImage from '@/components/ListingImage';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -9,8 +10,6 @@ interface Props {
   onCreateNew: () => void;
   onEdit: (id: number) => void;
 }
-
-const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
 
 export default function MyListingsScreen({ onBack, onListingClick, onCreateNew, onEdit }: Props) {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -93,11 +92,11 @@ export default function MyListingsScreen({ onBack, onListingClick, onCreateNew, 
             <div key={l.id} className="bg-white rounded-2xl p-3 card-shadow">
               <div className="flex gap-3">
                 <button onClick={() => onListingClick(l.id)} className="shrink-0">
-                  <img
-                    src={l.images?.[0] || PLACEHOLDER}
+                  <ListingImage
+                    src={l.images?.[0]}
                     alt={l.title}
                     className="w-20 h-20 rounded-xl object-cover"
-                    onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
+                    iconSize={24}
                   />
                 </button>
                 <button onClick={() => onListingClick(l.id)} className="flex-1 min-w-0 text-left">

@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, Chat, formatDate, formatOnlineStatus } from '@/lib/api';
+import ListingImage from '@/components/ListingImage';
 import Icon from '@/components/ui/icon';
 
 interface Props {
   onChatOpen: (chat: Chat) => void;
 }
-
-const PLACEHOLDER = 'https://cdn.poehali.dev/projects/d65ee484-6681-47d8-a176-bbe2415ceef3/files/2291a7e5-3513-4003-9ec3-c753a61b4a28.jpg';
 
 export default function MessagesScreen({ onChatOpen }: Props) {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -91,12 +90,7 @@ export default function MessagesScreen({ onChatOpen }: Props) {
 
               {/* Listing thumb */}
               <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0">
-                <img
-                  src={chat.listing_image || PLACEHOLDER}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  onError={e => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
-                />
+                <ListingImage src={chat.listing_image} alt="" className="w-full h-full object-cover" iconSize={18} />
               </div>
             </button>
             );
