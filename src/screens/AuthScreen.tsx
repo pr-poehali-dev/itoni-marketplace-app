@@ -112,19 +112,8 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
           <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
           <p className="text-gray-400 text-sm text-center mb-5">Войдите через Telegram — быстро и безопасно</p>
 
-          {/* Официальный виджет Telegram (основной вход) */}
+          {/* Единая кнопка входа через Telegram */}
           <div ref={widgetRef} className="flex justify-center min-h-[48px] items-center" />
-
-          {/* Запасная кнопка с логотипом Telegram — открывает бота */}
-          <a
-            href={`https://t.me/${TELEGRAM_BOT_USERNAME}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 w-full flex items-center justify-center gap-2.5 bg-[#229ED9] hover:bg-[#1f8fc4] text-white font-bold py-4 rounded-2xl text-base active:scale-[0.97] transition-all shadow-lg shadow-[#229ED9]/30"
-          >
-            <Icon name="Send" size={20} className="text-white -rotate-12" />
-            Войти через Telegram
-          </a>
 
           {loading && (
             <div className="flex items-center justify-center gap-2 text-blue-300 text-sm mt-4">
