@@ -16,9 +16,14 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    user_id = event.get('headers', {}).get('X-User-Id')
-    if not user_id:
+    headers = event.get('headers', {}) or {}
+    user_id = headers.get('X-User-Id') or headers.get('x-user-id')
+    admin_token = headers.get('X-Admin-Token') or headers.get('x-admin-token')
+    is_admin = admin_token == os.environ.get('ADMIN_TOKEN', 'itoni-admin-ok')
+    if not user_id and not is_admin:
         return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+    # Папка для файлов: по пользователю или общая админская
+    folder = str(user_id) if user_id else 'admin'
 
     body = {}
     raw_body = event.get('body')
@@ -54,7 +59,7 @@ def handler(event: dict, context) -> dict:
     if len(image_bytes) > 5 * 1024 * 1024:
         return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Фото слишком большое (макс. 5 МБ)'})}
 
-    key = f"listings/{user_id}/{uuid.uuid4()}.{ext}"
+    key = f"listings/{folder}/{uuid.uuid4()}.{ext}"
 
     try:
         s3 = boto3.client(

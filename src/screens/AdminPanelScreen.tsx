@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { adminApi, clearAdminToken } from '@/lib/adminApi';
-import { api } from '@/lib/api';
 import ListingImage from '@/components/ListingImage';
 import Icon from '@/components/ui/icon';
 
@@ -227,6 +226,7 @@ function BannersTab() {
   const [imageUrl, setImageUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [bannerError, setBannerError] = useState('');
 
   function load() {
     setLoading(true);
@@ -238,23 +238,34 @@ function BannersTab() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
+      setBannerError('Только JPG или PNG');
+      return;
+    }
+    setBannerError('');
     setUploading(true);
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = ev => resolve(ev.target?.result as string);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
-    const res = await api.uploadImage(base64, file.type);
-    if (res.url) setImageUrl(res.url);
-    setUploading(false);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = ev => resolve(ev.target?.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+      const res = await adminApi.uploadImage(base64, file.type);
+      if (res.url) setImageUrl(res.url);
+      else setBannerError(res.error || 'Не удалось загрузить фото');
+    } catch {
+      setBannerError('Не удалось загрузить фото');
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function save() {
-    if (!title && !imageUrl) return;
+    if (!title && !imageUrl) { setBannerError('Добавьте текст или картинку'); return; }
     setSaving(true);
     await adminApi.saveBanner({ title, image_url: imageUrl, link_url: link, is_active: true, position: 0 });
-    setTitle(''); setLink(''); setImageUrl('');
+    setTitle(''); setLink(''); setImageUrl(''); setBannerError('');
     setSaving(false);
     load();
   }
@@ -286,6 +297,7 @@ function BannersTab() {
             <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={pickImage} />
           </label>
         )}
+        {bannerError && <p className="text-red-500 text-xs text-center">{bannerError}</p>}
         <button onClick={save} disabled={saving || uploading} className="w-full bg-itoni-blue text-white font-bold py-3 rounded-xl text-sm disabled:opacity-60">
           {saving ? 'Сохранение...' : 'Добавить баннер'}
         </button>

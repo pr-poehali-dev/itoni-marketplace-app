@@ -1,4 +1,5 @@
 const AUTH_URL = 'https://functions.poehali.dev/ef33d28f-af7b-409d-abbe-a48c5e7fee33';
+const UPLOAD_URL = 'https://functions.poehali.dev/676c8ac5-82ee-46c2-b2e9-14337d9550f3';
 const TOKEN_KEY = 'itoni_admin_token';
 
 export function getAdminToken(): string | null {
@@ -46,4 +47,18 @@ export const adminApi = {
 
   broadcast: (data: { title: string; body: string; sms?: boolean }) => call('admin_broadcast', data),
   broadcasts: () => call('admin_broadcasts'),
+
+  // Загрузка картинки от имени админа (для баннеров)
+  uploadImage: async (base64: string, contentType = 'image/jpeg') => {
+    const token = getAdminToken();
+    const res = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Admin-Token': token } : {}),
+      },
+      body: JSON.stringify({ image: base64, content_type: contentType }),
+    });
+    return res.json();
+  },
 };
