@@ -100,6 +100,28 @@
       0 2px 12px rgba(0, 0, 0, 0.5),
       0 1px 3px rgba(0, 0, 0, 0.4);
   }
+
+  /* Поля ввода в тёмной теме: светлый текст, видимый плейсхолдер */
+  .dark input,
+  .dark textarea,
+  .dark select {
+    color: #f3f4f6;
+    color-scheme: dark;
+  }
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #8b94a3 !important;
+    opacity: 1;
+  }
+  /* Светлые «белые» поля с тёмным фоном получают светлый текст */
+  .dark .bg-white input,
+  .dark .bg-gray-50 input,
+  .dark .bg-gray-100 input,
+  .dark .bg-white textarea,
+  .dark .bg-gray-50 textarea,
+  .dark .bg-gray-100 textarea {
+    color: #f3f4f6;
+  }
 }
 
 @layer base {

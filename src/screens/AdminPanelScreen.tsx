@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi, clearAdminToken } from '@/lib/adminApi';
 import { api } from '@/lib/api';
+import ListingImage from '@/components/ListingImage';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -16,7 +17,7 @@ interface Stats {
   new_users_today: number; new_users_week: number; new_users_month: number;
 }
 interface AdminUser { id: number; name?: string; phone: string; city?: string; online: boolean; is_blocked: boolean; last_activity?: string; }
-interface AdminListing { id: number; title: string; category: string; author?: string; author_phone?: string; price: number; status: string; }
+interface AdminListing { id: number; title: string; category: string; author?: string; author_phone?: string; price: number; status: string; images?: string[]; }
 interface Banner { id: number; title?: string; image_url?: string; link_url?: string; is_active: boolean; position: number; }
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -190,6 +191,9 @@ function ListingsTab({ onOpenListing }: { onOpenListing: (id: number) => void })
       {listings.map(l => (
         <div key={l.id} className="bg-white rounded-2xl p-3 card-shadow">
           <div className="flex items-start gap-2">
+            <button onClick={() => onOpenListing(l.id)} className="shrink-0">
+              <ListingImage src={l.images?.[0]} alt={l.title} className="w-14 h-14 rounded-xl object-cover" iconSize={20} />
+            </button>
             <button onClick={() => onOpenListing(l.id)} className="flex-1 min-w-0 text-left">
               <p className="font-semibold text-gray-900 text-sm truncate">{l.title}</p>
               <p className="text-xs text-gray-500">{l.author || '—'} · {l.author_phone || ''}</p>

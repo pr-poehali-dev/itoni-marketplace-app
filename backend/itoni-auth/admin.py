@@ -185,7 +185,7 @@ def handle_admin(action, event, body, conn, cur):
             where.append("COALESCE(l.status,'active')=%s"); args.append(status)
         cur.execute(
             f"""SELECT l.id, l.title, l.category, l.created_at, COALESCE(l.status,'active'),
-                   l.reject_reason, u.name, u.phone, l.user_id, l.price
+                   l.reject_reason, u.name, u.phone, l.user_id, l.price, l.images
                 FROM itoni_listings l
                 LEFT JOIN itoni_users u ON u.id=l.user_id
                 WHERE {' AND '.join(where)}
@@ -197,7 +197,8 @@ def handle_admin(action, event, body, conn, cur):
             'id': r[0], 'title': r[1], 'category': r[2],
             'created_at': r[3].isoformat() if r[3] else None,
             'status': r[4], 'reject_reason': r[5], 'author': r[6], 'author_phone': r[7],
-            'user_id': r[8], 'price': r[9]
+            'user_id': r[8], 'price': r[9],
+            'images': list(r[10]) if r[10] else []
         } for r in rows]
         return _resp(200, {'listings': listings})
 
