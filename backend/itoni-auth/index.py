@@ -238,6 +238,15 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
 
+        # Если номер уже занят другим аккаунтом, у которого есть вход через Telegram — нельзя
+        cur.execute(
+            "SELECT id FROM itoni_users WHERE phone=%s AND telegram_id IS NOT NULL AND id<>%s LIMIT 1",
+            (phone, int(user_id))
+        )
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Этот номер уже используется другим аккаунтом'})}
+
         # Привязка к старому аккаунту: если есть пользователь с таким телефоном без telegram_id — переносим
         cur.execute(
             "SELECT id FROM itoni_users WHERE phone=%s AND telegram_id IS NULL AND id<>%s ORDER BY created_at ASC LIMIT 1",
