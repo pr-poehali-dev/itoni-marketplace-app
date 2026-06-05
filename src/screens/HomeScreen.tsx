@@ -88,6 +88,33 @@ export default function HomeScreen({ onListingClick, onCategorySelect, onSearch,
           </div>
         </div>
 
+        {/* Admin banners */}
+        {banners.length > 0 && (
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
+            {banners.map(b => {
+              const content = b.image_url ? (
+                <div className="relative w-72 h-32 rounded-2xl overflow-hidden shrink-0">
+                  <img src={b.image_url} alt={b.title || ''} className="w-full h-full object-cover" />
+                  {b.title && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                      <p className="text-white text-sm font-bold">{b.title}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-72 h-32 rounded-2xl bg-gradient-to-br from-itoni-orange to-amber-500 p-4 flex items-center shrink-0">
+                  <p className="text-white text-base font-extrabold leading-snug">{b.title}</p>
+                </div>
+              );
+              return b.link_url ? (
+                <a key={b.id} href={b.link_url} target="_blank" rel="noopener noreferrer" className="shrink-0">{content}</a>
+              ) : (
+                <div key={b.id} className="shrink-0">{content}</div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Categories */}
         <div>
           <h3 className="font-bold text-gray-900 mb-3">Категории</h3>

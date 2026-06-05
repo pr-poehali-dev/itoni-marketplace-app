@@ -19,9 +19,12 @@ import SecurityScreen from '@/screens/SecurityScreen';
 import SupportScreen from '@/screens/SupportScreen';
 import NotificationSettingsScreen from '@/screens/NotificationSettingsScreen';
 import NotificationsScreen from '@/screens/NotificationsScreen';
+import AdminLoginScreen from '@/screens/AdminLoginScreen';
+import AdminPanelScreen from '@/screens/AdminPanelScreen';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import MessageToast, { ToastData } from '@/components/MessageToast';
 import { clearUser } from '@/lib/auth';
+import { getAdminToken } from '@/lib/adminApi';
 import { applyTheme, getTheme } from '@/lib/theme';
 
 type Screen =
@@ -39,7 +42,9 @@ type Screen =
   | { name: 'security' }
   | { name: 'support' }
   | { name: 'notification-settings' }
-  | { name: 'notifications' };
+  | { name: 'notifications' }
+  | { name: 'admin-login' }
+  | { name: 'admin-panel' };
 
 const tabToScreen: Record<Tab, Screen> = {
   home: { name: 'home' },
@@ -51,6 +56,9 @@ const tabToScreen: Record<Tab, Screen> = {
 
 function getInitialScreen(): Screen {
   const params = new URLSearchParams(window.location.search);
+  if (window.location.pathname === '/admin' || params.has('admin')) {
+    return getAdminToken() ? { name: 'admin-panel' } : { name: 'admin-login' };
+  }
   const id = params.get('id');
   if (window.location.pathname === '/listing' && id && !isNaN(Number(id))) {
     return { name: 'listing', id: Number(id) };
@@ -179,8 +187,25 @@ export default function Index() {
     });
   }
 
+  if (screen.name === 'admin-login') {
+    return (
+      <AdminLoginScreen
+        onBack={() => setScreen(authed ? { name: 'home' } : { name: 'home' })}
+        onSuccess={() => setScreen({ name: 'admin-panel' })}
+      />
+    );
+  }
+  if (screen.name === 'admin-panel') {
+    return (
+      <AdminPanelScreen
+        onExit={() => setScreen({ name: 'home' })}
+        onOpenListing={(id) => setScreen({ name: 'listing', id })}
+      />
+    );
+  }
+
   if (!authed) {
-    return <AuthScreen onAuth={() => setAuthed(true)} />;
+    return <AuthScreen onAuth={() => setAuthed(true)} onAdmin={() => setScreen({ name: 'admin-login' })} />;
   }
 
   function handleAccountGone() {

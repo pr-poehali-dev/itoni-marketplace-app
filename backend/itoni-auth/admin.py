@@ -2,9 +2,48 @@ import os
 import json
 import io
 import csv
+import random
+import string
+import urllib.request
+import urllib.parse
 
 ADMIN_EMAIL = (os.environ.get('ADMIN_EMAIL') or 'muratdzaurov@mail.ru').strip()
 ADMIN_PASSWORD = (os.environ.get('ADMIN_PASSWORD') or 'Dzaurov23061994').strip()
+
+# Телефоны администраторов (вход по SMS-коду). Можно несколько через запятую в ADMIN_PHONES.
+ADMIN_PHONES = [
+    p.strip().lstrip('+')
+    for p in (os.environ.get('ADMIN_PHONES') or '79249910611').split(',')
+    if p.strip()
+]
+
+
+def _norm_phone(phone: str) -> str:
+    digits = ''.join(c for c in (phone or '') if c.isdigit())
+    if digits.startswith('8') and len(digits) == 11:
+        digits = '7' + digits[1:]
+    return digits
+
+
+def _send_sms(phone: str, text: str):
+    """Отправка SMS через SMS.RU. Возвращает (ok, error)."""
+    api_key = (os.environ.get('SMS_API_KEY') or '').strip()
+    if not api_key:
+        return False, 'Ключ SMS не настроен'
+    to = _norm_phone(phone)
+    params = urllib.parse.urlencode({'api_id': api_key, 'to': to, 'msg': text, 'json': 1})
+    try:
+        with urllib.request.urlopen(f'https://sms.ru/sms/send?{params}', timeout=20) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print('admin _send_sms error:', repr(e))
+        return False, 'Сервис SMS недоступен'
+    if data.get('status') == 'OK':
+        sms = (data.get('sms') or {}).get(to, {})
+        if sms.get('status') == 'OK':
+            return True, None
+        return False, sms.get('status_text') or 'SMS не отправлено'
+    return False, data.get('status_text') or 'SMS не отправлено'
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -56,6 +95,44 @@ def handle_admin(action, event, body, conn, cur):
             return _resp(401, {'error': 'Неверный email'})
         return _resp(401, {'error': 'Неверный пароль'})
 
+    # Вход в админку по номеру телефона — шаг 1: отправка кода в SMS
+    if action == 'admin_login_phone':
+        phone = _norm_phone(body.get('phone') or '')
+        if phone not in ADMIN_PHONES:
+            return _resp(403, {'error': 'Этот номер не является администратором'})
+        code = ''.join(random.choices(string.digits, k=4))
+        from datetime import datetime, timedelta
+        expires = datetime.now() + timedelta(minutes=5)
+        cur.execute(
+            "INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s,%s,%s)",
+            ('+' + phone, code, expires)
+        )
+        conn.commit()
+        ok, err = _send_sms(phone, f'Код входа в админ-панель иТони: {code}')
+        if not ok:
+            return _resp(503, {'error': err or 'Не удалось отправить код'})
+        return _resp(200, {'success': True})
+
+    # Вход по номеру — шаг 2: проверка кода
+    if action == 'admin_verify_phone':
+        phone = _norm_phone(body.get('phone') or '')
+        code = (body.get('code') or '').strip()
+        if phone not in ADMIN_PHONES:
+            return _resp(403, {'error': 'Доступ запрещён'})
+        cur.execute(
+            """SELECT id FROM itoni_sms_codes
+               WHERE phone=%s AND code=%s AND expires_at > NOW()
+               ORDER BY id DESC LIMIT 1""",
+            ('+' + phone, code)
+        )
+        row = cur.fetchone()
+        if not row:
+            return _resp(401, {'error': 'Неверный или просроченный код'})
+        cur.execute("DELETE FROM itoni_sms_codes WHERE phone=%s", ('+' + phone,))
+        _log(cur, f'Вход в админ-панель по номеру +{phone}')
+        conn.commit()
+        return _resp(200, {'success': True, 'token': ADMIN_TOKEN})
+
     # Все остальные требуют токен
     if not is_admin(event, body):
         return _resp(403, {'error': 'Доступ запрещён'})
@@ -63,25 +140,28 @@ def handle_admin(action, event, body, conn, cur):
     # ── РАЗДЕЛ 1. ПОЛЬЗОВАТЕЛИ ──
     if action == 'admin_users':
         search = (body.get('search') or '').strip()
+        cols = """id, name, phone, city, region, created_at, is_blocked, last_activity,
+                  (last_activity IS NOT NULL AND last_activity > NOW() - INTERVAL '5 minutes') AS online"""
         if search:
             like = f'%{search}%'
             cur.execute(
-                """SELECT id, name, phone, city, region, created_at, is_blocked
-                   FROM itoni_users
+                f"""SELECT {cols} FROM itoni_users
                    WHERE name ILIKE %s OR phone ILIKE %s
-                   ORDER BY created_at DESC LIMIT 500""",
+                   ORDER BY online DESC, last_activity DESC NULLS LAST, created_at DESC LIMIT 500""",
                 (like, like)
             )
         else:
             cur.execute(
-                """SELECT id, name, phone, city, region, created_at, is_blocked
-                   FROM itoni_users ORDER BY created_at DESC LIMIT 500"""
+                f"""SELECT {cols} FROM itoni_users
+                   ORDER BY online DESC, last_activity DESC NULLS LAST, created_at DESC LIMIT 500"""
             )
         rows = cur.fetchall()
         users = [{
             'id': r[0], 'name': r[1], 'phone': r[2], 'city': r[3],
             'region': r[4], 'created_at': r[5].isoformat() if r[5] else None,
-            'is_blocked': r[6]
+            'is_blocked': r[6],
+            'last_activity': r[7].isoformat() if r[7] else None,
+            'online': bool(r[8])
         } for r in rows]
         return _resp(200, {'users': users})
 
@@ -186,6 +266,10 @@ def handle_admin(action, event, body, conn, cur):
         cur.execute("SELECT COUNT(*) FROM itoni_users WHERE created_at::date = CURRENT_DATE"); stats['new_users_today'] = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM itoni_users WHERE created_at > NOW() - INTERVAL '7 days'"); stats['new_users_week'] = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM itoni_users WHERE created_at > NOW() - INTERVAL '30 days'"); stats['new_users_month'] = cur.fetchone()[0]
+        # онлайн и активность
+        cur.execute("SELECT COUNT(*) FROM itoni_users WHERE last_activity > NOW() - INTERVAL '5 minutes'"); stats['online'] = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM itoni_users WHERE last_activity > NOW() - INTERVAL '24 hours'"); stats['active_today'] = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM itoni_users WHERE last_activity IS NULL OR last_activity < NOW() - INTERVAL '30 days'"); stats['inactive'] = cur.fetchone()[0]
         # категории
         cur.execute("SELECT category, COUNT(*) FROM itoni_listings GROUP BY category")
         stats['by_category'] = {r[0]: r[1] for r in cur.fetchall()}
@@ -296,19 +380,36 @@ def handle_admin(action, event, body, conn, cur):
         title = (body.get('title') or '').strip()[:60]
         text = (body.get('body') or '').strip()[:200]
         kind = body.get('kind') or 'info'
+        send_sms = bool(body.get('sms'))
         if not title or not text:
             return _resp(400, {'error': 'Заполните заголовок и текст'})
         cur.execute("INSERT INTO itoni_broadcasts (title, body, kind) VALUES (%s,%s,%s)", (title, text, kind))
-        cur.execute("SELECT id FROM itoni_users")
-        user_ids = [r[0] for r in cur.fetchall()]
-        for uid in user_ids:
+        # Уведомления внутри приложения — всем
+        cur.execute("SELECT id, phone FROM itoni_users")
+        users = cur.fetchall()
+        for uid, _phone in users:
             cur.execute(
                 "INSERT INTO itoni_notifications (user_id, type, title, body) VALUES (%s,'system',%s,%s)",
                 (uid, title, text)
             )
-        _log(cur, f'Отправил рассылку «{title}» ({len(user_ids)} получателей)')
+        sms_sent = 0
+        sms_failed = 0
+        if send_sms:
+            msg = f'иТони: {title}. {text}'[:300]
+            seen = set()
+            for _uid, phone in users:
+                p = _norm_phone(phone)
+                if not p or len(p) < 11 or p in seen:
+                    continue
+                seen.add(p)
+                ok, _err = _send_sms(p, msg)
+                if ok:
+                    sms_sent += 1
+                else:
+                    sms_failed += 1
+        _log(cur, f'Рассылка «{title}» ({len(users)} увед., SMS: {sms_sent})')
         conn.commit()
-        return _resp(200, {'success': True, 'sent': len(user_ids)})
+        return _resp(200, {'success': True, 'sent': len(users), 'sms_sent': sms_sent, 'sms_failed': sms_failed})
 
     if action == 'admin_broadcasts':
         cur.execute("SELECT id, title, body, kind, created_at FROM itoni_broadcasts ORDER BY created_at DESC LIMIT 200")

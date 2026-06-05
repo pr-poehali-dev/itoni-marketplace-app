@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 
 interface Props {
   onAuth: () => void;
+  onAdmin?: () => void;
 }
 
 function formatPhone(digits: string): string {
@@ -18,7 +19,7 @@ function formatPhone(digits: string): string {
   return out;
 }
 
-export default function AuthScreen({ onAuth }: Props) {
+export default function AuthScreen({ onAuth, onAdmin }: Props) {
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [digits, setDigits] = useState('');
   const [code, setCode] = useState('');
@@ -117,7 +118,17 @@ export default function AuthScreen({ onAuth }: Props) {
 
       <div className="relative flex-1 flex flex-col items-center justify-center pt-14 px-6">
         <div className="text-center z-10 animate-fade-in">
-          <span className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-clip-text text-transparent" style={{ fontFamily: 'Golos Text' }}>
+          {onAdmin && (
+            <button
+              onClick={onAdmin}
+              className="mb-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-blue-200 text-[11px] font-semibold active:scale-95 transition-transform"
+            >
+              <Icon name="ShieldCheck" size={12} className="text-itoni-orange" />
+              Админ
+            </button>
+          )}
+          <div />
+          <span className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-clip-text text-transparent block" style={{ fontFamily: 'Golos Text' }}>
             иТони
           </span>
           <div className="mx-auto mt-1 mb-1 w-40 h-[3px] rounded-full bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
