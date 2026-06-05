@@ -1,9 +1,19 @@
 import { useState } from 'react';
 import { getNotificationSettings, saveNotificationSettings, NotificationSettings } from '@/lib/settings';
+import { api } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 
 interface Props {
   onBack: () => void;
+}
+
+const PUSH_KEY = 'itoni_push_enabled';
+
+declare global {
+  interface Window {
+    OneSignalDeferred?: Array<(os: unknown) => void>;
+    __syncPushId?: () => void;
+  }
 }
 
 function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () => void; disabled?: boolean }) {
@@ -20,11 +30,27 @@ function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () => void;
 
 export default function NotificationSettingsScreen({ onBack }: Props) {
   const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings());
+  const [pushOn, setPushOn] = useState<boolean>(localStorage.getItem(PUSH_KEY) !== 'false');
 
   function update(key: keyof NotificationSettings) {
     const next = { ...settings, [key]: !settings[key] };
     setSettings(next);
     saveNotificationSettings(next);
+  }
+
+  function togglePush() {
+    const next = !pushOn;
+    setPushOn(next);
+    localStorage.setItem(PUSH_KEY, String(next));
+    api.setPushEnabled(next);
+    if (next) {
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async (os) => {
+        const OneSignal = os as { Notifications?: { requestPermission?: () => Promise<void> } };
+        try { await OneSignal.Notifications?.requestPermission?.(); } catch { /* noop */ }
+        window.__syncPushId?.();
+      });
+    }
   }
 
   const items: { key: keyof NotificationSettings; icon: string; label: string; desc: string; disabled?: boolean }[] = [
@@ -45,6 +71,19 @@ export default function NotificationSettingsScreen({ onBack }: Props) {
       </div>
 
       <div className="px-4 py-5">
+        <div className="bg-white rounded-2xl card-shadow overflow-hidden mb-4">
+          <div className="flex items-center gap-3 px-4 py-4">
+            <div className="w-10 h-10 rounded-xl bg-itoni-orange-light flex items-center justify-center shrink-0">
+              <Icon name="BellRing" size={20} className="text-itoni-orange" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm">Push-уведомления</p>
+              <p className="text-xs text-gray-500">Получать уведомления, даже когда приложение закрыто</p>
+            </div>
+            <Toggle on={pushOn} onToggle={togglePush} />
+          </div>
+        </div>
+
         <div className="bg-white rounded-2xl card-shadow overflow-hidden">
           {items.map((item, i) => (
             <div

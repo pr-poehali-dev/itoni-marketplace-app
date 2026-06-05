@@ -88,6 +88,19 @@ export const api = {
   markNotificationsRead: () =>
     fetch(`${URLS.messages}?mode=read_notifications`, { method: 'POST', headers: authHeaders(), body: '{}' }).then(r => r.json()),
 
+  deleteNotification: (id: number) =>
+    fetch(`${URLS.messages}?mode=notification`, { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ id }) }).then(r => r.json()),
+
+  clearNotifications: () =>
+    fetch(`${URLS.messages}?mode=notification`, { method: 'DELETE', headers: authHeaders(), body: '{}' }).then(r => r.json()),
+
+  // Push (OneSignal)
+  savePushId: (onesignal_id: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'save_push_id', onesignal_id }) }).then(r => r.json()),
+
+  setPushEnabled: (enabled: boolean) =>
+    fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'set_push_enabled', enabled }) }).then(r => r.json()),
+
   // Report
   reportListing: (listingId: number, reason: string, comment?: string) =>
     fetch(URLS.listings, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'report', listing_id: listingId, reason, comment }) }).then(r => r.json()),

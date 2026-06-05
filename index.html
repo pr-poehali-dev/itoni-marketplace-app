@@ -41,6 +41,49 @@
 <div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
 
+<!-- OneSignal Web Push -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function (OneSignal) {
+        try {
+            await OneSignal.init({
+                appId: "acb29583-96f3-4378-ba21-afeb103dd952",
+                allowLocalhostAsSecureOrigin: true,
+                notifyButton: { enable: false }
+            });
+
+            async function syncPushId() {
+                try {
+                    var raw = localStorage.getItem('itoni_user');
+                    if (!raw) return;
+                    var uid = JSON.parse(raw).id;
+                    if (!uid) return;
+                    var sub = OneSignal.User && OneSignal.User.PushSubscription;
+                    var pid = sub && sub.id;
+                    if (!pid) return;
+                    await fetch("https://functions.poehali.dev/ef33d28f-af7b-409d-abbe-a48c5e7fee33", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "X-User-Id": String(uid) },
+                        body: JSON.stringify({ action: "save_push_id", onesignal_id: pid })
+                    });
+                } catch (e) { console.log("push sync error", e); }
+            }
+
+            // Спросить разрешение и сохранить ID после входа
+            try { await OneSignal.Notifications.requestPermission(); } catch (e) {}
+            await syncPushId();
+
+            if (OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.addEventListener) {
+                OneSignal.User.PushSubscription.addEventListener("change", syncPushId);
+            }
+            window.__syncPushId = syncPushId;
+        } catch (e) {
+            console.log("OneSignal init error", e);
+        }
+    });
+</script>
+
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function (m, e, t, r, i, k, a) {

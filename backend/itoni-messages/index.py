@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.request
 import psycopg2
 
 CORS_HEADERS = {
@@ -11,6 +12,34 @@ CORS_HEADERS = {
 
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
+
+def send_push(player_ids, title, message, url=None):
+    """Отправить push через OneSignal. player_ids — список строк."""
+    app_id = (os.environ.get('ONESIGNAL_APP_ID') or '').strip()
+    api_key = (os.environ.get('ONESIGNAL_API_KEY') or '').strip()
+    ids = [p for p in (player_ids or []) if p]
+    if not app_id or not api_key or not ids:
+        return
+    payload = {
+        'app_id': app_id,
+        'include_player_ids': ids,
+        'headings': {'ru': title, 'en': title},
+        'contents': {'ru': message, 'en': message},
+    }
+    if url:
+        payload['url'] = url
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(
+        'https://onesignal.com/api/v1/notifications',
+        data=data,
+        headers={'Content-Type': 'application/json', 'Authorization': f'Basic {api_key}'},
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+    except Exception as e:
+        print('OneSignal push error:', repr(e))
 
 def handler(event: dict, context) -> dict:
     """Чат и уведомления: сообщения между пользователями, лента уведомлений"""
@@ -110,6 +139,17 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
 
+    # DELETE ?mode=notification - удалить одно уведомление (или все, если id не указан)
+    if method == 'DELETE' and params.get('mode') == 'notification':
+        note_id = body.get('id') or params.get('id')
+        if note_id:
+            cur.execute("DELETE FROM itoni_notifications WHERE id=%s AND user_id=%s", (int(note_id), user_id))
+        else:
+            cur.execute("DELETE FROM itoni_notifications WHERE user_id=%s", (user_id,))
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
     # GET / - история переписки
     if method == 'GET':
         other_id = params.get('other_id')
@@ -205,7 +245,16 @@ def handler(event: dict, context) -> dict:
         )
 
         conn.commit()
+
+        # Push получателю, если включены уведомления и есть OneSignal ID
+        cur.execute(
+            "SELECT onesignal_id FROM itoni_users WHERE id=%s AND COALESCE(push_enabled, TRUE)=TRUE",
+            (int(receiver_id),)
+        )
+        prow = cur.fetchone()
         cur.close(); conn.close()
+        if prow and prow[0]:
+            send_push([prow[0]], 'Новое сообщение в иТони', f'{sender_name}: {text[:80]}')
 
         return {
             'statusCode': 201,

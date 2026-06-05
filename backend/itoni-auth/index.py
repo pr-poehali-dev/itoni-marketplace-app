@@ -184,6 +184,30 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
 
+    # Сохранить OneSignal ID пользователя (для push-уведомлений)
+    if method == 'POST' and action == 'save_push_id':
+        user_id = event.get('headers', {}).get('X-User-Id') or event.get('headers', {}).get('x-user-id')
+        onesignal_id = (body.get('onesignal_id') or '').strip()
+        if not user_id or not onesignal_id:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Нет данных'})}
+        cur.execute("UPDATE itoni_users SET onesignal_id=%s WHERE id=%s", (onesignal_id, int(user_id)))
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
+    # Включить/выключить push-уведомления
+    if method == 'POST' and action == 'set_push_enabled':
+        user_id = event.get('headers', {}).get('X-User-Id') or event.get('headers', {}).get('x-user-id')
+        enabled = bool(body.get('enabled'))
+        if not user_id:
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
+        cur.execute("UPDATE itoni_users SET push_enabled=%s WHERE id=%s", (enabled, int(user_id)))
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True})}
+
     # Публичный: активные баннеры
     if action == 'get_banners':
         cur.execute("SELECT id, title, image_url, link_url FROM itoni_banners WHERE is_active=TRUE ORDER BY position ASC, id DESC")

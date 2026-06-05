@@ -25,6 +25,37 @@ def _norm_phone(phone: str) -> str:
     return digits
 
 
+def _send_push(player_ids, title, message):
+    """Push через OneSignal всем переданным player_ids (список строк)."""
+    app_id = (os.environ.get('ONESIGNAL_APP_ID') or '').strip()
+    api_key = (os.environ.get('ONESIGNAL_API_KEY') or '').strip()
+    ids = [p for p in (player_ids or []) if p]
+    if not app_id or not api_key or not ids:
+        return 0
+    sent = 0
+    for i in range(0, len(ids), 2000):
+        chunk = ids[i:i + 2000]
+        payload = json.dumps({
+            'app_id': app_id,
+            'include_player_ids': chunk,
+            'headings': {'ru': title, 'en': title},
+            'contents': {'ru': message, 'en': message},
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            'https://onesignal.com/api/v1/notifications',
+            data=payload,
+            headers={'Content-Type': 'application/json', 'Authorization': f'Basic {api_key}'},
+            method='POST'
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp.read()
+            sent += len(chunk)
+        except Exception as e:
+            print('OneSignal broadcast push error:', repr(e))
+    return sent
+
+
 def _send_sms(phone: str, text: str):
     """Отправка SMS через SMS.RU. Возвращает (ok, error)."""
     api_key = (os.environ.get('SMS_API_KEY') or '').strip()
@@ -382,24 +413,25 @@ def handle_admin(action, event, body, conn, cur):
         text = (body.get('body') or '').strip()[:200]
         kind = body.get('kind') or 'info'
         send_sms = bool(body.get('sms'))
+        send_push = bool(body.get('push', True))
         if not title or not text:
             return _resp(400, {'error': 'Заполните заголовок и текст'})
         cur.execute("INSERT INTO itoni_broadcasts (title, body, kind) VALUES (%s,%s,%s)", (title, text, kind))
         # Уведомления внутри приложения — всем
-        cur.execute("SELECT id, phone FROM itoni_users")
+        cur.execute("SELECT id, phone, onesignal_id, COALESCE(push_enabled, TRUE) FROM itoni_users")
         users = cur.fetchall()
-        for uid, _phone in users:
+        for u in users:
             cur.execute(
                 "INSERT INTO itoni_notifications (user_id, type, title, body) VALUES (%s,'system',%s,%s)",
-                (uid, title, text)
+                (u[0], title, text)
             )
         sms_sent = 0
         sms_failed = 0
         if send_sms:
             msg = f'иТони: {title}. {text}'[:300]
             seen = set()
-            for _uid, phone in users:
-                p = _norm_phone(phone)
+            for u in users:
+                p = _norm_phone(u[1])
                 if not p or len(p) < 11 or p in seen:
                     continue
                 seen.add(p)
@@ -408,9 +440,13 @@ def handle_admin(action, event, body, conn, cur):
                     sms_sent += 1
                 else:
                     sms_failed += 1
-        _log(cur, f'Рассылка «{title}» ({len(users)} увед., SMS: {sms_sent})')
+        push_sent = 0
+        if send_push:
+            player_ids = [u[2] for u in users if u[2] and u[3]]
+            push_sent = _send_push(player_ids, title, text)
+        _log(cur, f'Рассылка «{title}» ({len(users)} увед., SMS: {sms_sent}, push: {push_sent})')
         conn.commit()
-        return _resp(200, {'success': True, 'sent': len(users), 'sms_sent': sms_sent, 'sms_failed': sms_failed})
+        return _resp(200, {'success': True, 'sent': len(users), 'sms_sent': sms_sent, 'sms_failed': sms_failed, 'push_sent': push_sent})
 
     if action == 'admin_broadcasts':
         cur.execute("SELECT id, title, body, kind, created_at FROM itoni_broadcasts ORDER BY created_at DESC LIMIT 200")
