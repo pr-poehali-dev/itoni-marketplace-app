@@ -27,9 +27,8 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
 }
 
 export const adminApi = {
-  // Вход по номеру телефона
-  loginPhone: (phone: string) => call('admin_login_phone', { phone }),
-  verifyPhone: (phone: string, code: string) => call('admin_verify_phone', { phone, code }),
+  // Вход по email + паролю
+  loginEmail: (email: string, password: string) => call('admin_login', { email, password }),
 
   // Данные
   stats: () => call('admin_stats'),
