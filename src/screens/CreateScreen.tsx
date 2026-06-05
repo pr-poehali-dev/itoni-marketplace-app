@@ -15,6 +15,7 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
   const [loading, setLoading] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [error, setError] = useState('');
+  const [rejected, setRejected] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [form, setForm] = useState({
     title: '', description: '', price: '',
@@ -65,6 +66,7 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
     if (!form.title || !form.price) { setError('Заполните название и цену'); return; }
     setLoading(true);
     setError('');
+    setRejected(false);
     const res = await api.createListing({
       title: form.title,
       description: form.description,
@@ -84,6 +86,7 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
     if (res.success) {
       onSuccess(res.id);
     } else {
+      setRejected(!!res.moderation);
       setError(res.error || 'Ошибка публикации');
     }
   }
@@ -303,7 +306,19 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
               {form.description && <p className="text-sm text-gray-600 line-clamp-2">{form.description}</p>}
             </div>
 
-            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+            {error && (
+              rejected ? (
+                <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
+                  <Icon name="ShieldAlert" size={22} className="text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-red-600 text-sm mb-0.5">Объявление отклонено</p>
+                    <p className="text-red-500 text-sm leading-snug">{error}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-red-500 text-sm mb-4">{error}</p>
+              )
+            )}
 
             <div className="flex gap-3">
               <button onClick={() => setStep(2)} className="flex-1 border border-gray-200 text-gray-600 font-bold py-4 rounded-xl">

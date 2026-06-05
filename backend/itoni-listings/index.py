@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import psycopg2
 
 CORS_HEADERS = {
@@ -8,6 +9,56 @@ CORS_HEADERS = {
     'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Auth-Token, X-Session-Id, X-Admin-Token',
     'Content-Type': 'application/json'
 }
+
+# Чёрный список слов для автомодерации (категория -> слова).
+# Подбор по подстроке, регистр игнорируется, кириллица/латиница.
+BLACKLIST = {
+    'оружие': [
+        'пистолет', 'пистолета', 'пистолеты', 'револьвер', 'автомат калашников',
+        'калашников', 'винтовк', 'карабин', 'снайпер', 'глушитель',
+        'патрон', 'патроны', 'боеприпас', 'граната', 'тротил', 'взрывчат',
+        'кастет', 'арбалет', 'выкидной нож', 'нож-бабочка', 'нунчак',
+        'травмат', 'огнестрел', 'обрез', 'дробовик', 'gun', 'pistol', 'rifle',
+    ],
+    'наркотики': [
+        'кокаин', 'героин', 'марихуан', 'гашиш', 'амфетамин', 'метамфетамин',
+        'мефедрон', 'экстази', 'lsd', 'лсд', 'спайс', 'соль закладк', 'закладк',
+        'наркотик', 'трав закладк', 'шишки топ', 'меф ', 'мдма', 'гидропон',
+        'грибы псилоцибин', 'psilocyb',
+    ],
+    'порнография': [
+        'порно', 'порнуха', 'эротик', 'интим услуг', 'секс услуг',
+        'проститут', 'эскорт', 'вебкам интим', 'голая девушка', 'обнажен',
+        'porn', 'xxx', 'nude',
+    ],
+    'экстремизм': [
+        'свастик', 'нацист', 'хайль гитлер', 'зиг хайль', 'майн кампф',
+        'mein kampf', 'белая раса власть', 'игил', 'isis',
+    ],
+}
+
+# Поиск контактов в тексте (телефоны, мессенджеры, ссылки)
+CONTACT_PATTERNS = [
+    re.compile(r'(?:\+7|\b8)[\s\-(]?\d{3}[\s\-)]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}\b'),
+    re.compile(r'\b(?:whatsapp|ватсап|вотсап|telegram|телеграм|телега|вайбер|viber)\b', re.IGNORECASE),
+    re.compile(r'(?:https?://|www\.|t\.me/|wa\.me/)\S+', re.IGNORECASE),
+    re.compile(r'@[a-zA-Z0-9_]{4,}'),
+]
+
+
+def moderate_text(title: str, description: str):
+    """Проверка текста объявления по чёрному списку.
+    Возвращает (ok: bool, reason: str|None)."""
+    text = f"{title or ''} {description or ''}".lower()
+    for category, words in BLACKLIST.items():
+        for w in words:
+            if w in text:
+                return False, category
+    for pattern in CONTACT_PATTERNS:
+        if pattern.search(f"{title or ''} {description or ''}"):
+            return False, 'контактные данные'
+    return True, None
+
 
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
@@ -235,6 +286,20 @@ def handler(event: dict, context) -> dict:
             if not body.get(f):
                 cur.close(); conn.close()
                 return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': f'Поле {f} обязательно'})}
+
+        # Автомодерация текста объявления
+        ok, reason = moderate_text(body.get('title'), body.get('description'))
+        if not ok:
+            cur.close(); conn.close()
+            return {
+                'statusCode': 422,
+                'headers': CORS_HEADERS,
+                'body': json.dumps({
+                    'error': f'Объявление отклонено. Причина: запрещённое содержимое ({reason}). Уберите его и попробуйте снова.',
+                    'reason': reason,
+                    'moderation': True
+                })
+            }
 
         images = body.get('images', [])
 
