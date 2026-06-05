@@ -11,7 +11,7 @@ interface Props {
 }
 
 // Имя Telegram-бота (без @), к которому привязан Login Widget
-const TELEGRAM_BOT_USERNAME = 'itoni_login_bot';
+const TELEGRAM_BOT_USERNAME = 'iToni_bot';
 
 type TgUser = Record<string, unknown>;
 
