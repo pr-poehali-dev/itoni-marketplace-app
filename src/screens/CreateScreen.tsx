@@ -13,10 +13,12 @@ const STEPS = ['Фото', 'Основное', 'Детали', 'Публикац
 export default function CreateScreen({ onSuccess, onCancel }: Props) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [replacingIndex, setReplacingIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [rejected, setRejected] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const uploadingPhotos = uploadingCount > 0 || replacingIndex !== null;
   const [form, setForm] = useState({
     title: '', description: '', price: '',
     category: 'auto', brand: '', model: '',
@@ -28,38 +30,78 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
     setForm(f => ({ ...f, [key]: val }));
   }
 
+  const MAX_PHOTOS = 10;
+  const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+  const MAX_SIZE = 5 * 1024 * 1024;
+
+  // Проверка одного файла + загрузка. Возвращает url или бросает ошибку с понятным текстом.
+  async function uploadOne(file: File): Promise<string> {
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      throw new Error('Неподдерживаемый формат (только JPG/PNG)');
+    }
+    if (file.size > MAX_SIZE) {
+      throw new Error('Фото слишком большое (макс. 5 МБ)');
+    }
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target?.result as string);
+      reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+      reader.readAsDataURL(file);
+    });
+    const res = await api.uploadImage(base64, file.type);
+    if (!res?.url) {
+      throw new Error(res?.error || 'Сервер не принял фото, попробуйте ещё раз');
+    }
+    return res.url;
+  }
+
+  // Добавление новых фото
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []).slice(0, 10 - images.length);
-    if (!files.length) return;
+    const picked = Array.from(e.target.files || []);
     e.target.value = '';
-    setUploadingPhotos(true);
+    if (!picked.length) return;
     setError('');
 
-    let failed = 0;
+    const freeSlots = MAX_PHOTOS - images.length;
+    if (freeSlots <= 0) {
+      setError('Максимум 10 фото');
+      return;
+    }
+    if (picked.length > freeSlots) {
+      setError('Максимум 10 фото');
+    }
+    const files = picked.slice(0, freeSlots);
+
+    setUploadingCount(c => c + files.length);
+    let lastErr = '';
     for (const file of files) {
       try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = ev => resolve(ev.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const res = await api.uploadImage(base64, file.type);
-        if (res.url) {
-          // Добавляем каждое фото сразу, чтобы ничего не потерять при сбое следующего
-          setImages(prev => (prev.length < 10 ? [...prev, res.url] : prev));
-        } else {
-          failed++;
-        }
-      } catch {
-        failed++;
+        const url = await uploadOne(file);
+        setImages(prev => (prev.length < MAX_PHOTOS ? [...prev, url] : prev));
+      } catch (err) {
+        lastErr = (err as Error).message;
+      } finally {
+        setUploadingCount(c => c - 1);
       }
     }
+    if (lastErr) setError(lastErr);
+  }
 
-    if (failed > 0) {
-      setError(`Не удалось загрузить ${failed} фото. Попробуйте добавить их ещё раз.`);
+  // Замена одного фото
+  async function handleReplace(index: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError('');
+    setReplacingIndex(index);
+    try {
+      const url = await uploadOne(file);
+      setImages(prev => prev.map((img, i) => (i === index ? url : img)));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setReplacingIndex(null);
     }
-    setUploadingPhotos(false);
   }
 
   async function handlePublish() {
@@ -126,26 +168,43 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
               {images.map((img, i) => (
                 <div key={i} className="relative aspect-square rounded-xl overflow-hidden">
                   <img src={img} alt="" className="w-full h-full object-cover" />
+                  {replacingIndex === i && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Icon name="LoaderCircle" size={24} className="text-white animate-spin" />
+                    </div>
+                  )}
                   <button
                     onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center"
+                    disabled={uploadingPhotos}
+                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center disabled:opacity-50"
                   >
                     <Icon name="X" size={10} className="text-white" />
                   </button>
+                  {/* Заменить это фото */}
+                  <label className="absolute bottom-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center cursor-pointer">
+                    <Icon name="RefreshCw" size={10} className="text-white" />
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      disabled={uploadingPhotos}
+                      onChange={e => handleReplace(i, e)}
+                    />
+                  </label>
                   {i === 0 && <div className="absolute bottom-1 left-1 bg-itoni-blue text-white text-[9px] px-1.5 py-0.5 rounded-md font-medium">Главное</div>}
                 </div>
               ))}
-              {uploadingPhotos && (
-                <div className="aspect-square rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center">
+              {Array.from({ length: uploadingCount }).map((_, i) => (
+                <div key={`up-${i}`} className="aspect-square rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center">
                   <Icon name="LoaderCircle" size={22} className="text-itoni-blue animate-spin mb-1" />
                   <span className="text-xs text-gray-400">Загрузка...</span>
                 </div>
-              )}
-              {images.length < 10 && !uploadingPhotos && (
+              ))}
+              {images.length + uploadingCount < MAX_PHOTOS && (
                 <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer active:bg-gray-50">
                   <Icon name="Camera" size={24} className="text-gray-300 mb-1" />
                   <span className="text-xs text-gray-400">Добавить</span>
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleImagePick} />
+                  <input type="file" accept="image/jpeg,image/png" multiple className="hidden" onChange={handleImagePick} />
                 </label>
               )}
             </div>
@@ -324,8 +383,8 @@ export default function CreateScreen({ onSuccess, onCancel }: Props) {
               <button onClick={() => setStep(2)} className="flex-1 border border-gray-200 text-gray-600 font-bold py-4 rounded-xl">
                 Назад
               </button>
-              <button onClick={handlePublish} disabled={loading} className="flex-1 bg-itoni-orange text-white font-bold py-4 rounded-xl disabled:opacity-60">
-                {loading ? 'Публикация...' : '🚀 Опубликовать'}
+              <button onClick={handlePublish} disabled={loading || uploadingPhotos} className="flex-1 bg-itoni-orange text-white font-bold py-4 rounded-xl disabled:opacity-60">
+                {loading ? 'Публикация...' : uploadingPhotos ? 'Загрузка фото...' : '🚀 Опубликовать'}
               </button>
             </div>
           </div>
