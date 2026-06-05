@@ -69,75 +69,6 @@ def normalize_phone(raw: str) -> str:
     return '+' + digits if digits else ''
 
 
-def send_call_code(phone: str, ip: str = ''):
-    """Звонок-авторизация SMS.RU (code/call). Код = последние 4 цифры входящего номера.
-    Возвращает (ok: bool, code: str|None, error: str|None, called: bool).
-    called=False означает, что реального дозвона не было (free_repeat / cost=0)."""
-    api_key = (os.environ.get('SMS_API_KEY') or '').strip()
-    if not api_key:
-        return False, None, 'Ключ SMS не настроен', False
-    to = phone.lstrip('+')
-    query = {
-        'api_id': api_key,
-        'phone': to,
-        'json': 1,
-    }
-    if ip:
-        query['ip'] = ip
-    params = urllib.parse.urlencode(query)
-    url = f'https://sms.ru/code/call?{params}'
-    try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
-            raw = resp.read().decode('utf-8')
-        print('SMS.RU code/call response:', raw)
-        data = json.loads(raw)
-    except Exception as e:
-        print('SMS.RU code/call error:', repr(e))
-        return False, None, 'Сервис звонков временно недоступен', False
-    if data.get('status') == 'OK':
-        # Реальный дозвон был, если списана стоимость и это не повтор
-        try:
-            cost = float(data.get('cost') or 0)
-        except (ValueError, TypeError):
-            cost = 0.0
-        called = cost > 0 and not data.get('free_repeat')
-        return True, str(data.get('code', '')), None, called
-    text = data.get('status_text') or ''
-    return False, None, text or 'Не удалось совершить звонок', False
-
-
-def send_sms_code_ru(phone: str, code: str, ip: str = ''):
-    """Фолбэк: отправить код обычной SMS через SMS.RU (sms/send).
-    Возвращает (ok: bool, error: str|None)."""
-    api_key = (os.environ.get('SMS_API_KEY') or '').strip()
-    if not api_key:
-        return False, 'Ключ SMS не настроен'
-    to = phone.lstrip('+')
-    query = {
-        'api_id': api_key,
-        'to': to,
-        'msg': f'Код для входа в иТони: {code}',
-        'json': 1,
-    }
-    if ip:
-        query['ip'] = ip
-    params = urllib.parse.urlencode(query)
-    url = f'https://sms.ru/sms/send?{params}'
-    try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
-            raw = resp.read().decode('utf-8')
-        print('SMS.RU sms/send response:', raw)
-        data = json.loads(raw)
-    except Exception as e:
-        print('SMS.RU sms/send error:', repr(e))
-        return False, 'Сервис SMS временно недоступен'
-    if data.get('status') == 'OK':
-        sms = (data.get('sms') or {}).get(to, {})
-        if sms.get('status') == 'OK':
-            return True, None
-        return False, sms.get('status_text') or 'Не удалось отправить SMS'
-    return False, data.get('status_text') or 'Не удалось отправить SMS'
-
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -149,7 +80,7 @@ def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 def handler(event: dict, context) -> dict:
-    """Авторизация: отправка SMS-кода, верификация, принятие условий, удаление аккаунта"""
+    """Авторизация: вход через Telegram, сохранение телефона, принятие условий, профиль"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
@@ -227,70 +158,117 @@ def handler(event: dict, context) -> dict:
 
     USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email, show_phone"
 
-    # POST sms_send - позвонить и продиктовать код (последние 4 цифры номера звонка)
-    if method == 'POST' and action == 'sms_send':
+    # POST telegram_login - вход через Telegram Login Widget
+    if method == 'POST' and action == 'telegram_login':
+        tg = body.get('telegram') or {}
+        recv_hash = tg.get('hash')
+        if not recv_hash or not tg.get('id'):
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Некорректные данные Telegram'})}
+
+        bot_token = (os.environ.get('TELEGRAM_BOT_TOKEN') or '').strip()
+        if not bot_token:
+            cur.close(); conn.close()
+            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Вход через Telegram не настроен'})}
+
+        # Проверка подписи: data_check_string из всех полей кроме hash, отсортированных по ключу
+        check_pairs = []
+        for k in sorted(tg.keys()):
+            if k == 'hash':
+                continue
+            v = tg[k]
+            if v is None:
+                continue
+            check_pairs.append(f'{k}={v}')
+        data_check_string = '\n'.join(check_pairs)
+        secret_key = hashlib.sha256(bot_token.encode('utf-8')).digest()
+        calc_hash = hmac.new(secret_key, data_check_string.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc_hash, str(recv_hash)):
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не удалось подтвердить вход через Telegram'})}
+
+        # Проверка свежести (auth_date не старше 24 часов)
+        try:
+            auth_date = int(tg.get('auth_date') or 0)
+            if auth_date and (datetime.now().timestamp() - auth_date) > 86400:
+                cur.close(); conn.close()
+                return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Сессия Telegram устарела, войдите снова'})}
+        except (ValueError, TypeError):
+            pass
+
+        tg_id = int(tg['id'])
+        tg_name = (str(tg.get('first_name') or '') + ' ' + str(tg.get('last_name') or '')).strip() or 'Пользователь'
+        tg_photo = tg.get('photo_url')
+
+        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE telegram_id=%s", (tg_id,))
+        user = cur.fetchone()
+        is_new = False
+        if not user:
+            cur.execute(
+                "INSERT INTO itoni_users (telegram_id, name, photo) VALUES (%s,%s,%s) RETURNING " + USER_COLS,
+                (tg_id, tg_name, tg_photo)
+            )
+            user = cur.fetchone()
+            is_new = True
+        else:
+            # Подтянуть свежие имя/аватар, если у пользователя пусто
+            if not user[1] or not user[5]:
+                cur.execute(
+                    "UPDATE itoni_users SET name=COALESCE(NULLIF(name,''), %s), photo=COALESCE(photo, %s) WHERE telegram_id=%s RETURNING " + USER_COLS,
+                    (tg_name, tg_photo, tg_id)
+                )
+                user = cur.fetchone()
+        conn.commit()
+        cur.close(); conn.close()
+        # Нужен ли экран ввода телефона: для новых или у кого пустой телефон
+        needs_phone = not (user[2] or '').strip()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({
+            'success': True, 'is_new': is_new, 'needs_phone': needs_phone,
+            'accepted_terms': bool(user[6]), 'user': user_payload(user)
+        })}
+
+    # POST set_phone - сохранить номер телефона (для входа через Telegram, без подтверждения)
+    if method == 'POST' and action == 'set_phone':
+        user_id = event.get('headers', {}).get('X-User-Id') or event.get('headers', {}).get('x-user-id')
+        if not user_id:
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
         phone = normalize_phone(body.get('phone') or '')
         if len(phone) < 12:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
 
-        # IP пользователя для SMS.RU (защита от блокировок и антифрод)
-        user_ip = (event.get('requestContext', {}) or {}).get('identity', {}).get('sourceIp', '') or ''
-
-        ok, code, err, called = send_call_code(phone, user_ip)
-
-        delivery = 'call'
-        message = 'Сейчас вам позвонит робот. Ответьте и введите 4 цифры номера, с которого поступит звонок.'
-
-        # Фолбэк: если звонок не удался или дозвона по факту не было — шлём SMS со своим кодом
-        if not ok or not code or not called:
-            sms_code = ''.join(random.choices(string.digits, k=4))
-            sms_ok, sms_err = send_sms_code_ru(phone, sms_code, user_ip)
-            if sms_ok:
-                code = sms_code
-                delivery = 'sms'
-                message = 'Мы отправили код в SMS. Введите код из сообщения.'
-            elif not ok or not code:
-                cur.close(); conn.close()
-                return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': err or sms_err or 'Не удалось отправить код. Попробуйте позже.'})}
-
-        expires_at = datetime.now() + timedelta(minutes=3)
-        cur.execute("INSERT INTO itoni_sms_codes (phone, code, expires_at) VALUES (%s, %s, %s)", (phone, code.strip(), expires_at))
-        conn.commit()
-        cur.close(); conn.close()
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'delivery': delivery, 'message': message})}
-
-    # POST sms_verify - проверить код и войти/зарегистрировать
-    if method == 'POST' and action == 'sms_verify':
-        phone = normalize_phone(body.get('phone') or '')
-        code = (body.get('code') or '').strip()
-        if not phone or not code:
-            cur.close(); conn.close()
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите номер и код'})}
-
+        # Привязка к старому аккаунту: если есть пользователь с таким телефоном без telegram_id — переносим
         cur.execute(
-            "SELECT id FROM itoni_sms_codes WHERE phone=%s AND code=%s AND used=FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
-            (phone, code)
+            "SELECT id FROM itoni_users WHERE phone=%s AND telegram_id IS NULL AND id<>%s ORDER BY created_at ASC LIMIT 1",
+            (phone, int(user_id))
         )
-        code_row = cur.fetchone()
-        if not code_row:
-            cur.close(); conn.close()
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный или устаревший код'})}
-        cur.execute("UPDATE itoni_sms_codes SET used=TRUE WHERE id=%s", (code_row[0],))
-
-        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE phone=%s", (phone,))
-        user = cur.fetchone()
-        is_new = False
-        if not user:
+        old = cur.fetchone()
+        if old:
+            old_id = old[0]
+            cur.execute("SELECT telegram_id, name, photo FROM itoni_users WHERE id=%s", (int(user_id),))
+            cur_row = cur.fetchone()
+            tg_id_val, cur_name, cur_photo = cur_row[0], cur_row[1], cur_row[2]
+            # Переносим telegram-данные в старый аккаунт и удаляем временный telegram-аккаунт
+            cur.execute("DELETE FROM itoni_users WHERE id=%s", (int(user_id),))
             cur.execute(
-                "INSERT INTO itoni_users (phone) VALUES (%s) RETURNING " + USER_COLS,
-                (phone,)
+                "UPDATE itoni_users SET telegram_id=%s, name=COALESCE(NULLIF(name,''),%s), photo=COALESCE(photo,%s) WHERE id=%s RETURNING " + USER_COLS,
+                (tg_id_val, cur_name, cur_photo, old_id)
             )
             user = cur.fetchone()
-            is_new = True
+        else:
+            cur.execute(
+                "UPDATE itoni_users SET phone=%s WHERE id=%s RETURNING " + USER_COLS,
+                (phone, int(user_id))
+            )
+            user = cur.fetchone()
         conn.commit()
         cur.close(); conn.close()
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': is_new, 'accepted_terms': bool(user[6]), 'user': user_payload(user)})}
+        if not user:
+            return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Пользователь не найден'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({
+            'success': True, 'accepted_terms': bool(user[6]), 'user': user_payload(user)
+        })}
 
     # POST register - регистрация по логину и паролю
     if method == 'POST' and action == 'register':

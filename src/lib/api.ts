@@ -25,12 +25,13 @@ export const api = {
   loginPassword: (login: string, password: string) =>
     fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', login, password }) }).then(r => r.json()),
 
-  // Auth: SMS + код
-  sendSmsCode: (phone: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sms_send', phone }) }).then(r => r.json()),
+  // Auth: вход через Telegram
+  telegramLogin: (telegram: Record<string, unknown>) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'telegram_login', telegram }) }).then(r => r.json()),
 
-  verifySmsCode: (phone: string, code: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sms_verify', phone, code }) }).then(r => r.json()),
+  // Сохранить номер телефона (без подтверждения)
+  setPhone: (phone: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'set_phone', phone }) }).then(r => r.json()),
 
   updateProfile: (data: { name?: string; city?: string; region?: string; photo?: string; phone?: string }) =>
     fetch(URLS.auth, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),

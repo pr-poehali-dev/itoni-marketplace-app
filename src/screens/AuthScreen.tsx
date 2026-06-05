@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { saveUser } from '@/lib/auth';
 import TermsAcceptScreen from '@/screens/TermsAcceptScreen';
+import PhoneEntryScreen from '@/screens/PhoneEntryScreen';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -9,98 +10,35 @@ interface Props {
   onAdmin?: () => void;
 }
 
-function formatPhone(digits: string): string {
-  const d = digits.slice(0, 10);
-  let out = '+7';
-  if (d.length > 0) out += ' ' + d.slice(0, 3);
-  if (d.length >= 4) out += ' ' + d.slice(3, 6);
-  if (d.length >= 7) out += '-' + d.slice(6, 8);
-  if (d.length >= 9) out += '-' + d.slice(8, 10);
-  return out;
+// Имя Telegram-бота (без @), к которому привязан Login Widget
+const TELEGRAM_BOT_USERNAME = 'itoni_login_bot';
+
+type TgUser = Record<string, unknown>;
+
+declare global {
+  interface Window {
+    onTelegramAuth?: (user: TgUser) => void;
+  }
 }
 
 export default function AuthScreen({ onAuth, onAdmin }: Props) {
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
-  const [digits, setDigits] = useState('');
-  const [code, setCode] = useState('');
+  const [step, setStep] = useState<'login' | 'phone' | 'terms'>('login');
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
-  const [hint, setHint] = useState('');
-  const [showTerms, setShowTerms] = useState(false);
-  const [resendIn, setResendIn] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
 
-  const fullPhone = '+7' + digits;
-
-  function startResendTimer() {
-    setResendIn(30);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setResendIn(prev => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }
-
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
-
-  function handlePhoneInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value.replace(/\D/g, '');
-    let d = raw;
-    if (d.startsWith('7') || d.startsWith('8')) d = d.slice(1);
-    setDigits(d.slice(0, 10));
-  }
-
-  async function handleSend() {
-    if (digits.length !== 10) { setError('Введите корректный номер'); return; }
+  async function handleTelegram(tgUser: TgUser) {
     setLoading(true); setError('');
     try {
-      const res = await api.sendSmsCode(fullPhone);
-      setLoading(false);
-      if (res.success) {
-        setHint(res.message || '');
-        setStep('code');
-        startResendTimer();
-      } else setError(res.error || 'Не удалось отправить код');
-    } catch {
-      setLoading(false);
-      setError('Ошибка соединения. Попробуйте снова.');
-    }
-  }
-
-  async function handleResend() {
-    if (resendIn > 0 || resending) return;
-    setResending(true); setError(''); setCode('');
-    try {
-      const res = await api.sendSmsCode(fullPhone);
-      setResending(false);
-      if (res.success) {
-        setHint(res.message || '');
-        startResendTimer();
-      } else setError(res.error || 'Не удалось позвонить повторно');
-    } catch {
-      setResending(false);
-      setError('Ошибка соединения. Попробуйте снова.');
-    }
-  }
-
-  async function handleVerify() {
-    if (code.length < 4) { setError('Введите 4-значный код'); return; }
-    setLoading(true); setError('');
-    try {
-      const res = await api.verifySmsCode(fullPhone, code);
+      const res = await api.telegramLogin(tgUser);
       setLoading(false);
       if (res.success && res.user) {
         saveUser(res.user);
-        if (res.accepted_terms) onAuth();
-        else setShowTerms(true);
+        if (res.needs_phone) setStep('phone');
+        else if (!res.accepted_terms) setStep('terms');
+        else onAuth();
       } else {
-        setError(res.error || 'Неверный код');
+        setError(res.error || 'Не удалось войти через Telegram');
       }
     } catch {
       setLoading(false);
@@ -108,11 +46,34 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
     }
   }
 
-  if (showTerms) return <TermsAcceptScreen onAccepted={onAuth} />;
+  useEffect(() => {
+    window.onTelegramAuth = (user: TgUser) => handleTelegram(user);
+    if (!widgetRef.current) return;
+    widgetRef.current.innerHTML = '';
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-radius', '14');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    script.setAttribute('data-request-access', 'write');
+    widgetRef.current.appendChild(script);
+    return () => { window.onTelegramAuth = undefined; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  if (step === 'phone') {
+    return <PhoneEntryScreen onDone={(acceptedTerms) => {
+      // После номера: если условия уже приняты (старый пользователь) — входим, иначе документы
+      if (acceptedTerms) onAuth();
+      else setStep('terms');
+    }} />;
+  }
+  if (step === 'terms') return <TermsAcceptScreen onAccepted={onAuth} />;
 
   return (
     <div className="min-h-screen bg-[#0F172A] flex flex-col relative overflow-hidden">
-      {/* Decorative gradients */}
       <div className="absolute -top-32 -left-24 w-80 h-80 bg-itoni-blue/30 blur-[120px] rounded-full" />
       <div className="absolute -bottom-32 -right-24 w-80 h-80 bg-itoni-orange/20 blur-[120px] rounded-full" />
 
@@ -147,98 +108,24 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
       </div>
 
       <div className="relative z-10 px-5 pb-10">
-        {/* Card */}
         <div className="w-full max-w-sm mx-auto bg-[#1E293B] border border-white/10 rounded-[24px] p-6 shadow-2xl animate-slide-up">
-          {step === 'phone' ? (
-            <>
-              <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
-              <p className="text-gray-400 text-sm text-center mb-5">Введите номер телефона — мы позвоним и продиктуем код</p>
+          <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
+          <p className="text-gray-400 text-sm text-center mb-5">Войдите через Telegram — быстро и безопасно</p>
 
-              <div className="flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-itoni-blue transition-colors">
-                <span className="text-gray-300 text-base font-semibold">+7</span>
-                <div className="w-px h-5 bg-white/15" />
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={formatPhone(digits).replace(/^\+7\s?/, '')}
-                  onChange={handlePhoneInput}
-                  onKeyDown={e => e.key === 'Enter' && handleSend()}
-                  placeholder="999 999-99-99"
-                  className="flex-1 bg-transparent text-base text-white placeholder-gray-500 focus:outline-none"
-                />
-              </div>
+          {/* Официальный виджет Telegram */}
+          <div ref={widgetRef} className="flex justify-center min-h-[48px] items-center" />
 
-              {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
-
-              <button
-                onClick={handleSend}
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-itoni-blue to-blue-500 text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.97] shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
-              >
-                {loading && <Icon name="LoaderCircle" size={18} className="animate-spin" />}
-                {loading ? 'Звоним...' : 'Получить код'}
-              </button>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-bold text-white text-center mb-1">Введите код</h2>
-
-              {/* Инструкция */}
-              <div className="flex items-start gap-2 bg-itoni-blue/10 border border-itoni-blue/20 rounded-2xl p-3 mb-4">
-                <Icon name="PhoneCall" size={18} className="text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-gray-300 text-xs leading-relaxed">
-                  {hint || 'Сейчас вам позвонит робот. Ответьте и введите 4 цифры номера, с которого поступит звонок.'}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-4 mb-4 focus-within:border-itoni-blue transition-colors">
-                <Icon name="KeyRound" size={20} className="text-gray-400" />
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={code}
-                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  onKeyDown={e => e.key === 'Enter' && handleVerify()}
-                  placeholder="4-значный код"
-                  autoFocus
-                  className="flex-1 bg-transparent text-base text-white placeholder-gray-500 focus:outline-none tracking-[0.4em]"
-                />
-              </div>
-
-              {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
-
-              <button
-                onClick={handleVerify}
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-itoni-blue to-blue-500 text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60 transition-all active:scale-[0.97] shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
-              >
-                {loading && <Icon name="LoaderCircle" size={18} className="animate-spin" />}
-                {loading ? 'Проверяем...' : 'Войти'}
-              </button>
-
-              {/* Позвонить ещё раз */}
-              <button
-                onClick={handleResend}
-                disabled={resendIn > 0 || resending}
-                className="w-full text-sm py-3 mt-1 flex items-center justify-center gap-2 disabled:text-gray-500 text-blue-400 font-medium"
-              >
-                {resending ? (
-                  <><Icon name="LoaderCircle" size={15} className="animate-spin" /> Звоним...</>
-                ) : resendIn > 0 ? (
-                  `Позвонить ещё раз через ${resendIn} с`
-                ) : (
-                  <><Icon name="RefreshCw" size={15} /> Позвонить ещё раз</>
-                )}
-              </button>
-
-              <button
-                onClick={() => { setStep('phone'); setCode(''); setError(''); }}
-                className="w-full text-gray-400 text-sm py-2"
-              >
-                Изменить номер
-              </button>
-            </>
+          {loading && (
+            <div className="flex items-center justify-center gap-2 text-blue-300 text-sm mt-4">
+              <Icon name="LoaderCircle" size={18} className="animate-spin" />
+              Входим...
+            </div>
           )}
+          {error && <p className="text-red-400 text-sm mt-4 text-center">{error}</p>}
+
+          <p className="text-gray-500 text-xs text-center mt-5 leading-relaxed">
+            Нажимая «Войти через Telegram», вы продолжите регистрацию в иТони.
+          </p>
         </div>
       </div>
     </div>
