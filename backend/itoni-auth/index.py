@@ -48,7 +48,7 @@ def verify_magic_token(token: str):
     return data['email'], None
 
 
-def send_magic_link(to_email: str, token: str) -> bool:
+def send_magic_link(to_email: str, token: str):
     smtp_user = os.environ.get('SMTP_USER')
     smtp_password = os.environ.get('SMTP_PASSWORD')
     print(json.dumps({
@@ -56,12 +56,19 @@ def send_magic_link(to_email: str, token: str) -> bool:
         'smtp_user_present': bool(smtp_user),
         'smtp_password_present': bool(smtp_password),
         'smtp_user_len': len(smtp_user) if smtp_user else 0,
+        'smtp_password_len': len(smtp_password) if smtp_password else 0,
         'jwt_secret_present': bool(os.environ.get('JWT_SECRET')),
         'to': to_email,
     }))
-    if not smtp_user or not smtp_password:
-        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_secrets_missing'}))
-        return False
+    missing = []
+    if not smtp_user:
+        missing.append('SMTP_USER')
+    if not smtp_password:
+        missing.append('SMTP_PASSWORD')
+    if missing:
+        reason = 'Не заданы секреты: ' + ', '.join(missing)
+        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_secrets_missing', 'missing': missing}))
+        return False, reason
     link = f"{APP_URL}/auth/verify?token={token}"
     html = (
         "<div style=\"font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px\">"
@@ -88,13 +95,13 @@ def send_magic_link(to_email: str, token: str) -> bool:
         server.sendmail(smtp_user, [to_email], msg.as_string())
         server.quit()
         print(json.dumps({'event': 'magic_link_sent', 'to': to_email}))
-        return True
+        return True, None
     except smtplib.SMTPAuthenticationError as e:
         print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_auth_failed', 'detail': str(e)}))
-        return False
+        return False, 'Почта отклонила логин/пароль. Нужен пароль для внешних приложений mail.ru.'
     except Exception as e:
         print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_send_failed', 'detail': str(e)}))
-        return False
+        return False, f'Ошибка отправки: {str(e)[:120]}'
 
 
 def user_payload(user_row):
@@ -218,8 +225,9 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный email'})}
         cur.close(); conn.close()
         token = make_magic_token(email)
-        if not send_magic_link(email, token):
-            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Отправка письма временно недоступна. Попробуйте позже.'})}
+        ok, reason = send_magic_link(email, token)
+        if not ok:
+            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': reason or 'Отправка письма временно недоступна. Попробуйте позже.'})}
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': f'Ссылка для входа отправлена на {email}'})}
 
     # POST magic_verify - проверить токен из ссылки и войти/создать пользователя

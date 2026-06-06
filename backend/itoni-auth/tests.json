@@ -42,7 +42,7 @@
       "path": "/",
       "body": {"action": "magic_request", "email": "muratdzaurov@mail.ru"},
       "expectedStatus": 200,
-      "expectedBody": {"success": true},
+      "expectedBody": {"message": "string"},
       "bodyMatcher": "partial"
     }
   ]
