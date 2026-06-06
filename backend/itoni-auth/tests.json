@@ -1,47 +1,29 @@
 {
   "tests": [
     {
-      "name": "Register requires long password",
+      "name": "Magic request invalid email",
       "method": "POST",
       "path": "/",
-      "body": {"action": "register", "login": "ab", "password": "123"},
+      "body": {"action": "magic_request", "email": "notanemail"},
       "expectedStatus": 400,
       "expectedBody": {"error": "string"},
       "bodyMatcher": "partial"
     },
     {
-      "name": "Login wrong credentials",
+      "name": "Magic verify no token",
       "method": "POST",
       "path": "/",
-      "body": {"action": "login", "login": "nouser_xyz", "password": "wrongpass"},
+      "body": {"action": "magic_verify", "token": ""},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Magic verify invalid token",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "magic_verify", "token": "invalid.token.here"},
       "expectedStatus": 401,
-      "expectedBody": {"error": "string"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Email send invalid email",
-      "method": "POST",
-      "path": "/",
-      "body": {"action": "email_send", "email": "notanemail"},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "string"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Email verify wrong code",
-      "method": "POST",
-      "path": "/",
-      "body": {"action": "email_verify", "email": "test@example.com", "code": "0000"},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "string"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Telegram login missing data",
-      "method": "POST",
-      "path": "/",
-      "body": {"action": "telegram_login", "telegram": {}},
-      "expectedStatus": 400,
       "expectedBody": {"error": "string"},
       "bodyMatcher": "partial"
     },

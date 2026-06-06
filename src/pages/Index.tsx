@@ -4,6 +4,7 @@ import { api, Listing, Chat, Notification } from '@/lib/api';
 import { getNotificationSettings } from '@/lib/settings';
 
 import AuthScreen from '@/screens/AuthScreen';
+import VerifyScreen from '@/screens/VerifyScreen';
 import HomeScreen from '@/screens/HomeScreen';
 import SearchScreen from '@/screens/SearchScreen';
 import CreateScreen from '@/screens/CreateScreen';
@@ -66,8 +67,17 @@ function getInitialScreen(): Screen {
   return { name: 'home' };
 }
 
+function getInitialVerifyToken(): string | null {
+  if (window.location.pathname === '/auth/verify') {
+    const t = new URLSearchParams(window.location.search).get('token');
+    if (t) return t;
+  }
+  return null;
+}
+
 export default function Index() {
   const [authed, setAuthed] = useState(!!getUser());
+  const [verifyToken, setVerifyToken] = useState<string | null>(getInitialVerifyToken);
   const [screen, setScreen] = useState<Screen>(getInitialScreen);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [favorites, setFavorites] = useState<number[]>([]);
@@ -204,8 +214,22 @@ export default function Index() {
     );
   }
 
+  if (verifyToken) {
+    return (
+      <VerifyScreen
+        token={verifyToken}
+        onDone={() => {
+          window.history.replaceState({}, '', '/');
+          setVerifyToken(null);
+          setAuthed(true);
+          setScreen({ name: 'home' });
+        }}
+      />
+    );
+  }
+
   if (!authed) {
-    return <AuthScreen onAuth={() => setAuthed(true)} onAdmin={() => setScreen({ name: 'admin-login' })} />;
+    return <AuthScreen onAdmin={() => setScreen({ name: 'admin-login' })} />;
   }
 
   function handleAccountGone() {

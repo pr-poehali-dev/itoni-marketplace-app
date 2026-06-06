@@ -18,16 +18,13 @@ function authHeaders(): Record<string, string> {
 }
 
 export const api = {
-  // Auth: логин + пароль
-  register: (login: string, password: string, name?: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'register', login, password, name }) }).then(r => r.json()),
+  // Auth: запросить магическую ссылку на email
+  magicRequest: (email: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'magic_request', email }) }).then(r => r.json()),
 
-  loginPassword: (login: string, password: string) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', login, password }) }).then(r => r.json()),
-
-  // Auth: вход через Telegram
-  telegramLogin: (telegram: Record<string, unknown>) =>
-    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'telegram_login', telegram }) }).then(r => r.json()),
+  // Auth: проверить токен из ссылки
+  magicVerify: (token: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'magic_verify', token }) }).then(r => r.json()),
 
   // Сохранить номер телефона (без подтверждения)
   setPhone: (phone: string) =>

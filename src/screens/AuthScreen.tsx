@@ -1,76 +1,32 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
-import { saveUser } from '@/lib/auth';
-import TermsAcceptScreen from '@/screens/TermsAcceptScreen';
-import PhoneEntryScreen from '@/screens/PhoneEntryScreen';
 import Icon from '@/components/ui/icon';
 
 interface Props {
-  onAuth: () => void;
   onAdmin?: () => void;
 }
 
-// Имя Telegram-бота (без @), к которому привязан Login Widget
-const TELEGRAM_BOT_USERNAME = 'iToni_bot';
-
-type TgUser = Record<string, unknown>;
-
-declare global {
-  interface Window {
-    onTelegramAuth?: (user: TgUser) => void;
-  }
-}
-
-export default function AuthScreen({ onAuth, onAdmin }: Props) {
-  const [step, setStep] = useState<'login' | 'phone' | 'terms'>('login');
+export default function AuthScreen({ onAdmin }: Props) {
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const widgetRef = useRef<HTMLDivElement>(null);
+  const [sent, setSent] = useState(false);
 
-  async function handleTelegram(tgUser: TgUser) {
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  async function handleSubmit() {
+    if (!validEmail) { setError('Введите корректный email'); return; }
     setLoading(true); setError('');
     try {
-      const res = await api.telegramLogin(tgUser);
+      const res = await api.magicRequest(email.trim().toLowerCase());
       setLoading(false);
-      if (res.success && res.user) {
-        saveUser(res.user);
-        if (res.needs_phone) setStep('phone');
-        else if (!res.accepted_terms) setStep('terms');
-        else onAuth();
-      } else {
-        setError(res.error || 'Не удалось войти через Telegram');
-      }
+      if (res.success) setSent(true);
+      else setError(res.error || 'Не удалось отправить письмо');
     } catch {
       setLoading(false);
       setError('Ошибка соединения. Попробуйте снова.');
     }
   }
-
-  useEffect(() => {
-    window.onTelegramAuth = (user: TgUser) => handleTelegram(user);
-    if (!widgetRef.current) return;
-    widgetRef.current.innerHTML = '';
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.async = true;
-    script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-radius', '14');
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
-    widgetRef.current.appendChild(script);
-    return () => { window.onTelegramAuth = undefined; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
-
-  if (step === 'phone') {
-    return <PhoneEntryScreen onDone={(acceptedTerms) => {
-      // После номера: если условия уже приняты (старый пользователь) — входим, иначе документы
-      if (acceptedTerms) onAuth();
-      else setStep('terms');
-    }} />;
-  }
-  if (step === 'terms') return <TermsAcceptScreen onAccepted={onAuth} />;
 
   return (
     <div className="min-h-screen bg-[#0F172A] flex flex-col relative overflow-hidden">
@@ -88,7 +44,6 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
               Админ
             </button>
           )}
-          <div />
           <span className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-clip-text text-transparent block" style={{ fontFamily: 'Golos Text' }}>
             иТони
           </span>
@@ -109,23 +64,56 @@ export default function AuthScreen({ onAuth, onAdmin }: Props) {
 
       <div className="relative z-10 px-5 pb-10">
         <div className="w-full max-w-sm mx-auto bg-[#1E293B] border border-white/10 rounded-[24px] p-6 shadow-2xl animate-slide-up">
-          <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
-          <p className="text-gray-400 text-sm text-center mb-5">Войдите через Telegram — быстро и безопасно</p>
-
-          {/* Единая кнопка входа через Telegram */}
-          <div ref={widgetRef} className="flex justify-center min-h-[48px] items-center" />
-
-          {loading && (
-            <div className="flex items-center justify-center gap-2 text-blue-300 text-sm mt-4">
-              <Icon name="LoaderCircle" size={18} className="animate-spin" />
-              Входим...
+          {sent ? (
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-itoni-blue/20 rounded-3xl mb-4">
+                <Icon name="MailCheck" size={32} className="text-blue-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-1">Проверьте почту</h2>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Мы отправили ссылку для входа на <span className="text-blue-300 font-semibold">{email.trim().toLowerCase()}</span>.
+                Откройте письмо и нажмите кнопку «Войти в иТони».
+              </p>
+              <button
+                onClick={() => { setSent(false); setError(''); }}
+                className="mt-5 text-blue-400 text-sm font-semibold active:opacity-70"
+              >
+                Указать другой email
+              </button>
             </div>
-          )}
-          {error && <p className="text-red-400 text-sm mt-4 text-center">{error}</p>}
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
+              <p className="text-gray-400 text-sm text-center mb-5">Введите email — пришлём ссылку для входа</p>
 
-          <p className="text-gray-500 text-xs text-center mt-5 leading-relaxed">
-            Нажимая «Войти через Telegram», вы продолжите регистрацию в иТони.
-          </p>
+              <input
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                placeholder="you@mail.ru"
+                className="w-full bg-[#0F172A] border border-white/10 rounded-2xl px-4 py-4 text-white placeholder-gray-500 text-base focus:outline-none focus:border-itoni-blue transition-colors"
+              />
+
+              {error && <p className="text-red-400 text-sm mt-3 text-center">{error}</p>}
+
+              <button
+                onClick={handleSubmit}
+                disabled={!validEmail || loading}
+                className={`mt-4 w-full font-bold py-4 rounded-2xl text-base transition-all flex items-center justify-center gap-2 ${validEmail && !loading ? 'bg-itoni-blue text-white active:scale-[0.98] shadow-lg shadow-blue-500/20' : 'bg-white/10 text-gray-500 cursor-not-allowed'}`}
+              >
+                {loading ? <Icon name="LoaderCircle" size={18} className="animate-spin" /> : null}
+                {loading ? 'Отправляем...' : 'Войти'}
+              </button>
+
+              <p className="text-gray-500 text-xs text-center mt-5 leading-relaxed">
+                Нажимая «Войти», вы продолжите регистрацию в иТони.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

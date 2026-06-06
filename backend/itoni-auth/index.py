@@ -1,19 +1,18 @@
 import json
 import os
-import random
-import string
 import hashlib
 import hmac
 import smtplib
-import urllib.request
-import urllib.parse
+import jwt
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from email.header import Header
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import psycopg2
 from admin import handle_admin
 
 SUPPORT_EMAIL = 'muratdzaurov@mail.ru'
+APP_URL = 'https://itoni.ru'
 
 
 def hash_password(password: str) -> str:
@@ -25,19 +24,55 @@ def check_password(password: str, hashed: str) -> bool:
     return hmac.compare_digest(hash_password(password), hashed or '')
 
 
-def send_email_code(to_email: str, code: str) -> bool:
+def make_magic_token(email: str) -> str:
+    secret = os.environ.get('JWT_SECRET') or os.environ.get('DATABASE_URL', 'itoni-secret')
+    payload = {
+        'email': email,
+        'purpose': 'magic_login',
+        'exp': datetime.now(timezone.utc) + timedelta(minutes=15),
+        'iat': datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, secret, algorithm='HS256')
+
+
+def verify_magic_token(token: str):
+    secret = os.environ.get('JWT_SECRET') or os.environ.get('DATABASE_URL', 'itoni-secret')
+    try:
+        data = jwt.decode(token, secret, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return None, 'Ссылка устарела. Запросите новую.'
+    except jwt.InvalidTokenError:
+        return None, 'Ссылка недействительна.'
+    if data.get('purpose') != 'magic_login' or not data.get('email'):
+        return None, 'Ссылка недействительна.'
+    return data['email'], None
+
+
+def send_magic_link(to_email: str, token: str) -> bool:
     smtp_user = os.environ.get('SMTP_USER')
     smtp_password = os.environ.get('SMTP_PASSWORD')
     if not smtp_user or not smtp_password:
         return False
-    text = (
-        f"Ваш код для входа в иТони: {code}\n\n"
-        "Код действует 10 минут. Если вы не запрашивали вход — просто проигнорируйте это письмо."
+    link = f"{APP_URL}/auth/verify?token={token}"
+    html = (
+        "<div style=\"font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px\">"
+        "<h2 style=\"color:#2563eb;margin:0 0 8px\">иТони</h2>"
+        "<p style=\"color:#111;font-size:16px\">Нажмите кнопку, чтобы войти в приложение:</p>"
+        f"<a href=\"{link}\" style=\"display:inline-block;background:#2563eb;color:#fff;"
+        "text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:12px;margin:16px 0\">"
+        "Войти в иТони</a>"
+        "<p style=\"color:#666;font-size:13px\">Ссылка действует 15 минут. "
+        "Если вы не запрашивали вход — просто проигнорируйте это письмо.</p>"
+        f"<p style=\"color:#999;font-size:12px;word-break:break-all\">{link}</p>"
+        "</div>"
     )
-    msg = MIMEText(text, 'plain', 'utf-8')
-    msg['Subject'] = Header('Код для входа в иТони', 'utf-8')
+    text = f"Войдите в иТони по ссылке (действует 15 минут):\n{link}"
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = Header('Вход в иТони', 'utf-8')
     msg['From'] = smtp_user
     msg['To'] = to_email
+    msg.attach(MIMEText(text, 'plain', 'utf-8'))
+    msg.attach(MIMEText(html, 'html', 'utf-8'))
     server = smtplib.SMTP_SSL('smtp.mail.ru', 465, timeout=20)
     server.login(smtp_user, smtp_password)
     server.sendmail(smtp_user, [to_email], msg.as_string())
@@ -80,7 +115,7 @@ def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 def handler(event: dict, context) -> dict:
-    """Авторизация: вход через Telegram, сохранение телефона, принятие условий, профиль"""
+    """Авторизация: вход по магической ссылке на email, сохранение телефона, принятие условий, профиль"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
@@ -158,76 +193,48 @@ def handler(event: dict, context) -> dict:
 
     USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email, show_phone"
 
-    # POST telegram_login - вход через Telegram Login Widget
-    if method == 'POST' and action == 'telegram_login':
-        tg = body.get('telegram') or {}
-        recv_hash = tg.get('hash')
-        if not recv_hash or not tg.get('id'):
+    # POST magic_request - отправить магическую ссылку для входа на email
+    if method == 'POST' and action == 'magic_request':
+        email = (body.get('email') or '').strip().lower()
+        if '@' not in email or '.' not in email.split('@')[-1]:
             cur.close(); conn.close()
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Некорректные данные Telegram'})}
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный email'})}
+        cur.close(); conn.close()
+        token = make_magic_token(email)
+        if not send_magic_link(email, token):
+            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Отправка письма временно недоступна. Попробуйте позже.'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': f'Ссылка для входа отправлена на {email}'})}
 
-        bot_token = (os.environ.get('TELEGRAM_BOT_TOKEN') or '').strip()
-        if not bot_token:
+    # POST magic_verify - проверить токен из ссылки и войти/создать пользователя
+    if method == 'POST' and action == 'magic_verify':
+        token = (body.get('token') or '').strip()
+        if not token:
             cur.close(); conn.close()
-            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Вход через Telegram не настроен'})}
-
-        # Проверка подписи: data_check_string из всех полей кроме hash, отсортированных по ключу
-        check_pairs = []
-        for k in sorted(tg.keys()):
-            if k == 'hash':
-                continue
-            v = tg[k]
-            if v is None:
-                continue
-            check_pairs.append(f'{k}={v}')
-        data_check_string = '\n'.join(check_pairs)
-        secret_key = hashlib.sha256(bot_token.encode('utf-8')).digest()
-        calc_hash = hmac.new(secret_key, data_check_string.encode('utf-8'), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calc_hash, str(recv_hash)):
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Нет токена'})}
+        email, err = verify_magic_token(token)
+        if err:
             cur.close(); conn.close()
-            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не удалось подтвердить вход через Telegram'})}
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': err})}
 
-        # Проверка свежести (auth_date не старше 24 часов)
-        try:
-            auth_date = int(tg.get('auth_date') or 0)
-            if auth_date and (datetime.now().timestamp() - auth_date) > 86400:
-                cur.close(); conn.close()
-                return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Сессия Telegram устарела, войдите снова'})}
-        except (ValueError, TypeError):
-            pass
-
-        tg_id = int(tg['id'])
-        tg_name = (str(tg.get('first_name') or '') + ' ' + str(tg.get('last_name') or '')).strip() or 'Пользователь'
-        tg_photo = tg.get('photo_url')
-
-        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE telegram_id=%s", (tg_id,))
+        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE LOWER(email)=LOWER(%s)", (email,))
         user = cur.fetchone()
         is_new = False
         if not user:
             cur.execute(
-                "INSERT INTO itoni_users (telegram_id, name, photo) VALUES (%s,%s,%s) RETURNING " + USER_COLS,
-                (tg_id, tg_name, tg_photo)
+                "INSERT INTO itoni_users (email, name) VALUES (%s, %s) RETURNING " + USER_COLS,
+                (email, email.split('@')[0])
             )
             user = cur.fetchone()
             is_new = True
-        else:
-            # Подтянуть свежие имя/аватар, если у пользователя пусто
-            if not user[1] or not user[5]:
-                cur.execute(
-                    "UPDATE itoni_users SET name=COALESCE(NULLIF(name,''), %s), photo=COALESCE(photo, %s) WHERE telegram_id=%s RETURNING " + USER_COLS,
-                    (tg_name, tg_photo, tg_id)
-                )
-                user = cur.fetchone()
         conn.commit()
         cur.close(); conn.close()
-        # Нужен ли экран ввода телефона: для новых или у кого пустой телефон
         needs_phone = not (user[2] or '').strip()
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({
             'success': True, 'is_new': is_new, 'needs_phone': needs_phone,
             'accepted_terms': bool(user[6]), 'user': user_payload(user)
         })}
 
-    # POST set_phone - сохранить номер телефона (для входа через Telegram, без подтверждения)
+    # POST set_phone - сохранить номер телефона (без подтверждения)
     if method == 'POST' and action == 'set_phone':
         user_id = event.get('headers', {}).get('X-User-Id') or event.get('headers', {}).get('x-user-id')
         if not user_id:
@@ -238,39 +245,11 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
 
-        # Если номер уже занят другим аккаунтом, у которого есть вход через Telegram — нельзя
         cur.execute(
-            "SELECT id FROM itoni_users WHERE phone=%s AND telegram_id IS NOT NULL AND id<>%s LIMIT 1",
+            "UPDATE itoni_users SET phone=%s WHERE id=%s RETURNING " + USER_COLS,
             (phone, int(user_id))
         )
-        if cur.fetchone():
-            cur.close(); conn.close()
-            return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Этот номер уже используется другим аккаунтом'})}
-
-        # Привязка к старому аккаунту: если есть пользователь с таким телефоном без telegram_id — переносим
-        cur.execute(
-            "SELECT id FROM itoni_users WHERE phone=%s AND telegram_id IS NULL AND id<>%s ORDER BY created_at ASC LIMIT 1",
-            (phone, int(user_id))
-        )
-        old = cur.fetchone()
-        if old:
-            old_id = old[0]
-            cur.execute("SELECT telegram_id, name, photo FROM itoni_users WHERE id=%s", (int(user_id),))
-            cur_row = cur.fetchone()
-            tg_id_val, cur_name, cur_photo = cur_row[0], cur_row[1], cur_row[2]
-            # Переносим telegram-данные в старый аккаунт и удаляем временный telegram-аккаунт
-            cur.execute("DELETE FROM itoni_users WHERE id=%s", (int(user_id),))
-            cur.execute(
-                "UPDATE itoni_users SET telegram_id=%s, name=COALESCE(NULLIF(name,''),%s), photo=COALESCE(photo,%s) WHERE id=%s RETURNING " + USER_COLS,
-                (tg_id_val, cur_name, cur_photo, old_id)
-            )
-            user = cur.fetchone()
-        else:
-            cur.execute(
-                "UPDATE itoni_users SET phone=%s WHERE id=%s RETURNING " + USER_COLS,
-                (phone, int(user_id))
-            )
-            user = cur.fetchone()
+        user = cur.fetchone()
         conn.commit()
         cur.close(); conn.close()
         if not user:
@@ -278,91 +257,6 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({
             'success': True, 'accepted_terms': bool(user[6]), 'user': user_payload(user)
         })}
-
-    # POST register - регистрация по логину и паролю
-    if method == 'POST' and action == 'register':
-        login = (body.get('login') or '').strip()
-        password = body.get('password') or ''
-        name = (body.get('name') or '').strip()
-        if len(login) < 3:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Логин минимум 3 символа'})}
-        if len(password) < 6:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Пароль минимум 6 символов'})}
-
-        cur.execute("SELECT id FROM itoni_users WHERE LOWER(login)=LOWER(%s)", (login,))
-        if cur.fetchone():
-            cur.close(); conn.close()
-            return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Такой логин уже занят'})}
-
-        cur.execute(
-            "INSERT INTO itoni_users (login, password_hash, name) VALUES (%s, %s, %s) RETURNING id, name, phone, city, region, photo, accepted_terms, login, email",
-            (login, hash_password(password), name or login)
-        )
-        user = cur.fetchone()
-        conn.commit()
-        cur.close(); conn.close()
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': True, 'accepted_terms': bool(user[6]), 'user': user_payload(user)})}
-
-    # POST login - вход по логину и паролю
-    if method == 'POST' and action == 'login':
-        login = (body.get('login') or '').strip()
-        password = body.get('password') or ''
-        if not login or not password:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите логин и пароль'})}
-
-        cur.execute("SELECT " + USER_COLS + ", password_hash FROM itoni_users WHERE LOWER(login)=LOWER(%s)", (login,))
-        row = cur.fetchone()
-        cur.close(); conn.close()
-        if not row or not check_password(password, row[9]):
-            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный логин или пароль'})}
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': False, 'accepted_terms': bool(row[6]), 'user': user_payload(row)})}
-
-    # POST email_send - отправить код на email
-    if method == 'POST' and action == 'email_send':
-        email = (body.get('email') or '').strip().lower()
-        if '@' not in email or '.' not in email:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный email'})}
-
-        code = ''.join(random.choices(string.digits, k=4))
-        expires_at = datetime.now() + timedelta(minutes=10)
-        cur.execute("INSERT INTO itoni_email_codes (email, code, expires_at) VALUES (%s, %s, %s)", (email, code, expires_at))
-        conn.commit()
-        cur.close(); conn.close()
-
-        if not send_email_code(email, code):
-            return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Отправка на email пока не настроена. Попробуйте вход по логину и паролю.'})}
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': f'Код отправлен на {email}'})}
-
-    # POST email_verify - проверить код с email и войти/зарегистрировать
-    if method == 'POST' and action == 'email_verify':
-        email = (body.get('email') or '').strip().lower()
-        code = (body.get('code') or '').strip()
-        if not email or not code:
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите email и код'})}
-
-        cur.execute(
-            "SELECT id FROM itoni_email_codes WHERE email=%s AND code=%s AND used=FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
-            (email, code)
-        )
-        code_row = cur.fetchone()
-        if not code_row:
-            cur.close(); conn.close()
-            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный или устаревший код'})}
-        cur.execute("UPDATE itoni_email_codes SET used=TRUE WHERE id=%s", (code_row[0],))
-
-        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE LOWER(email)=LOWER(%s)", (email,))
-        user = cur.fetchone()
-        is_new = False
-        if not user:
-            cur.execute(
-                "INSERT INTO itoni_users (email, name) VALUES (%s, %s) RETURNING id, name, phone, city, region, photo, accepted_terms, login, email",
-                (email, email.split('@')[0])
-            )
-            user = cur.fetchone()
-            is_new = True
-        conn.commit()
-        cur.close(); conn.close()
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'is_new': is_new, 'accepted_terms': bool(user[6]), 'user': user_payload(user)})}
 
     # POST support - обращение в поддержку (письмо администратору)
     if method == 'POST' and action == 'support':
