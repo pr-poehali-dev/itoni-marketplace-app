@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import hashlib
 import hmac
 import smtplib
@@ -49,10 +50,15 @@ def verify_magic_token(token: str):
 
 
 def send_magic_link(to_email: str, token: str):
-    smtp_user = (os.environ.get('SMTP_USER') or '').strip()
+    raw_user = (os.environ.get('SMTP_USER') or '').strip()
+    # Извлекаем корректный email, даже если в секрет попали лишние символы/пробелы
+    m = re.search(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', raw_user)
+    smtp_user = m.group(0) if m else raw_user
     smtp_password = (os.environ.get('SMTP_PASSWORD') or '').strip()
     print(json.dumps({
         'event': 'magic_link_attempt',
+        'raw_user_len': len(raw_user),
+        'clean_user': smtp_user,
         'smtp_user_present': bool(smtp_user),
         'smtp_password_present': bool(smtp_password),
         'smtp_user_len': len(smtp_user) if smtp_user else 0,
