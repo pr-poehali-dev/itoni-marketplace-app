@@ -69,7 +69,7 @@ def send_magic_link(to_email: str, token: str):
         'jwt_secret_present': bool(os.environ.get('JWT_SECRET')),
         'to': to_email,
     }))
-    missing = []  # noqa
+    missing = []  # check
     if not smtp_user:
         missing.append('SMTP_USER')
     if not smtp_password:
