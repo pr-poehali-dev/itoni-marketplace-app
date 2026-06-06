@@ -49,8 +49,8 @@ def verify_magic_token(token: str):
 
 
 def send_magic_link(to_email: str, token: str):
-    smtp_user = os.environ.get('SMTP_USER')
-    smtp_password = os.environ.get('SMTP_PASSWORD')
+    smtp_user = (os.environ.get('SMTP_USER') or '').strip()
+    smtp_password = (os.environ.get('SMTP_PASSWORD') or '').strip()
     print(json.dumps({
         'event': 'magic_link_attempt',
         'smtp_user_present': bool(smtp_user),
