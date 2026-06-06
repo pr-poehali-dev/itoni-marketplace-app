@@ -51,7 +51,16 @@ def verify_magic_token(token: str):
 def send_magic_link(to_email: str, token: str) -> bool:
     smtp_user = os.environ.get('SMTP_USER')
     smtp_password = os.environ.get('SMTP_PASSWORD')
+    print(json.dumps({
+        'event': 'magic_link_attempt',
+        'smtp_user_present': bool(smtp_user),
+        'smtp_password_present': bool(smtp_password),
+        'smtp_user_len': len(smtp_user) if smtp_user else 0,
+        'jwt_secret_present': bool(os.environ.get('JWT_SECRET')),
+        'to': to_email,
+    }))
     if not smtp_user or not smtp_password:
+        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_secrets_missing'}))
         return False
     link = f"{APP_URL}/auth/verify?token={token}"
     html = (
@@ -73,11 +82,19 @@ def send_magic_link(to_email: str, token: str) -> bool:
     msg['To'] = to_email
     msg.attach(MIMEText(text, 'plain', 'utf-8'))
     msg.attach(MIMEText(html, 'html', 'utf-8'))
-    server = smtplib.SMTP_SSL('smtp.mail.ru', 465, timeout=20)
-    server.login(smtp_user, smtp_password)
-    server.sendmail(smtp_user, [to_email], msg.as_string())
-    server.quit()
-    return True
+    try:
+        server = smtplib.SMTP_SSL('smtp.mail.ru', 465, timeout=20)
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_user, [to_email], msg.as_string())
+        server.quit()
+        print(json.dumps({'event': 'magic_link_sent', 'to': to_email}))
+        return True
+    except smtplib.SMTPAuthenticationError as e:
+        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_auth_failed', 'detail': str(e)}))
+        return False
+    except Exception as e:
+        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_send_failed', 'detail': str(e)}))
+        return False
 
 
 def user_payload(user_row):

@@ -35,6 +35,15 @@
       "expectedStatus": 401,
       "expectedBody": {"error": "string"},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Magic request real send (diagnostic)",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "magic_request", "email": "muratdzaurov@mail.ru"},
+      "expectedStatus": 200,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
     }
   ]
 }
