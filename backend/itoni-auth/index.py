@@ -89,19 +89,36 @@ def send_magic_link(to_email: str, token: str):
     msg['To'] = to_email
     msg.attach(MIMEText(text, 'plain', 'utf-8'))
     msg.attach(MIMEText(html, 'html', 'utf-8'))
-    try:
-        server = smtplib.SMTP_SSL('smtp.mail.ru', 465, timeout=20)
-        server.login(smtp_user, smtp_password)
-        server.sendmail(smtp_user, [to_email], msg.as_string())
-        server.quit()
-        print(json.dumps({'event': 'magic_link_sent', 'to': to_email}))
-        return True, None
-    except smtplib.SMTPAuthenticationError as e:
-        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_auth_failed', 'detail': str(e)}))
-        return False, 'Почта отклонила логин/пароль. Нужен пароль для внешних приложений mail.ru.'
-    except Exception as e:
-        print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_send_failed', 'detail': str(e)}))
-        return False, f'Ошибка отправки: {str(e)[:120]}'
+    raw = msg.as_string()
+    host = os.environ.get('SMTP_HOST', 'smtp.mail.ru')
+
+    # Способ 1: SSL на 465. Способ 2 (запасной): STARTTLS на 587.
+    last_detail = ''
+    for mode, port in (('ssl', 465), ('starttls', 587)):
+        try:
+            if mode == 'ssl':
+                server = smtplib.SMTP_SSL(host, port, timeout=25)
+            else:
+                server = smtplib.SMTP(host, port, timeout=25)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_user, [to_email], raw)
+            server.quit()
+            print(json.dumps({'event': 'magic_link_sent', 'to': to_email, 'mode': mode, 'port': port}))
+            return True, None
+        except smtplib.SMTPAuthenticationError as e:
+            # Неверный пароль — повтор на другом порту не поможет
+            print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_auth_failed', 'detail': str(e)}))
+            return False, 'Почта отклонила логин/пароль. Нужен «пароль для внешних приложений» mail.ru.'
+        except Exception as e:
+            last_detail = str(e)
+            print(json.dumps({'event': 'magic_link_retry', 'mode': mode, 'port': port, 'detail': last_detail}))
+            continue
+
+    print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_send_failed', 'detail': last_detail}))
+    return False, f'Не удалось отправить письмо: {last_detail[:120]}'
 
 
 def user_payload(user_row):
