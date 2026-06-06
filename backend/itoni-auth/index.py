@@ -54,10 +54,13 @@ def send_magic_link(to_email: str, token: str):
     # Извлекаем корректный email, даже если в секрет попали лишние символы/пробелы
     m = re.search(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', raw_user)
     smtp_user = m.group(0) if m else raw_user
-    smtp_password = (os.environ.get('SMTP_PASSWORD') or '').strip()
+    raw_password = os.environ.get('SMTP_PASSWORD')
+    smtp_password = (raw_password or '').strip()
     print(json.dumps({
         'event': 'magic_link_attempt',
         'raw_user_len': len(raw_user),
+        'raw_password_is_none': raw_password is None,
+        'raw_password_len': len(raw_password) if raw_password else 0,
         'clean_user': smtp_user,
         'smtp_user_present': bool(smtp_user),
         'smtp_password_present': bool(smtp_password),
