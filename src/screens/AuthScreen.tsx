@@ -1,16 +1,24 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { saveUser } from '@/lib/auth';
+import TermsAcceptScreen from '@/screens/TermsAcceptScreen';
+import PhoneEntryScreen from '@/screens/PhoneEntryScreen';
 import Icon from '@/components/ui/icon';
 
 interface Props {
   onAdmin?: () => void;
+  onAuthed: () => void;
 }
 
-export default function AuthScreen({ onAdmin }: Props) {
+export default function AuthScreen({ onAdmin, onAuthed }: Props) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [codeError, setCodeError] = useState('');
+  const [postStep, setPostStep] = useState<'none' | 'phone' | 'terms'>('none');
 
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
@@ -27,6 +35,34 @@ export default function AuthScreen({ onAdmin }: Props) {
       setError('Ошибка соединения. Попробуйте снова.');
     }
   }
+
+  async function handleVerifyCode() {
+    if (code.length !== 6) { setCodeError('Введите код из 6 цифр'); return; }
+    setCodeLoading(true); setCodeError('');
+    try {
+      const res = await api.magicVerifyCode(email.trim().toLowerCase(), code);
+      setCodeLoading(false);
+      if (res.success && res.user) {
+        saveUser(res.user);
+        if (res.needs_phone) setPostStep('phone');
+        else if (!res.accepted_terms) setPostStep('terms');
+        else onAuthed();
+      } else {
+        setCodeError(res.error || 'Неверный код');
+      }
+    } catch {
+      setCodeLoading(false);
+      setCodeError('Ошибка соединения. Попробуйте снова.');
+    }
+  }
+
+  if (postStep === 'phone') {
+    return <PhoneEntryScreen onDone={(acceptedTerms) => {
+      if (acceptedTerms) onAuthed();
+      else setPostStep('terms');
+    }} />;
+  }
+  if (postStep === 'terms') return <TermsAcceptScreen onAccepted={onAuthed} />;
 
   return (
     <div className="min-h-screen bg-[#0F172A] flex flex-col relative overflow-hidden">
@@ -71,11 +107,35 @@ export default function AuthScreen({ onAdmin }: Props) {
               </div>
               <h2 className="text-2xl font-bold text-white mb-1">Проверьте почту</h2>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Мы отправили ссылку для входа на <span className="text-blue-300 font-semibold">{email.trim().toLowerCase()}</span>.
-                Откройте письмо и нажмите кнопку «Войти в иТони».
+                Мы отправили письмо на <span className="text-blue-300 font-semibold">{email.trim().toLowerCase()}</span>.
+                Введите код из письма ниже или нажмите кнопку «Войти в иТони».
               </p>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={e => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setCodeError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
+                placeholder="000000"
+                className="mt-5 w-full bg-[#0F172A] border border-white/10 rounded-2xl px-4 py-4 text-white text-center text-2xl font-bold tracking-[0.5em] placeholder-gray-600 focus:outline-none focus:border-itoni-blue transition-colors"
+              />
+
+              {codeError && <p className="text-red-400 text-sm mt-3">{codeError}</p>}
+
               <button
-                onClick={() => { setSent(false); setError(''); }}
+                onClick={handleVerifyCode}
+                disabled={code.length !== 6 || codeLoading}
+                className={`mt-4 w-full font-bold py-4 rounded-2xl text-base transition-all flex items-center justify-center gap-2 ${code.length === 6 && !codeLoading ? 'bg-itoni-blue text-white active:scale-[0.98] shadow-lg shadow-blue-500/20' : 'bg-white/10 text-gray-500 cursor-not-allowed'}`}
+              >
+                {codeLoading ? <Icon name="LoaderCircle" size={18} className="animate-spin" /> : null}
+                {codeLoading ? 'Входим...' : 'Войти по коду'}
+              </button>
+
+              <button
+                onClick={() => { setSent(false); setError(''); setCode(''); setCodeError(''); }}
                 className="mt-5 text-blue-400 text-sm font-semibold active:opacity-70"
               >
                 Указать другой email
@@ -84,7 +144,7 @@ export default function AuthScreen({ onAdmin }: Props) {
           ) : (
             <>
               <h2 className="text-2xl font-bold text-white text-center mb-1">Вход</h2>
-              <p className="text-gray-400 text-sm text-center mb-5">Введите email — пришлём ссылку для входа</p>
+              <p className="text-gray-400 text-sm text-center mb-5">Введите email — пришлём ссылку и код для входа</p>
 
               <input
                 type="email"

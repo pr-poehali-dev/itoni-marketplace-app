@@ -26,6 +26,10 @@ export const api = {
   magicVerify: (token: string) =>
     fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'magic_verify', token }) }).then(r => r.json()),
 
+  // Auth: вход по коду из письма
+  magicVerifyCode: (email: string, code: string) =>
+    fetch(URLS.auth, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'magic_verify_code', email, code }) }).then(r => r.json()),
+
   // Сохранить номер телефона (без подтверждения)
   setPhone: (phone: string) =>
     fetch(URLS.auth, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'set_phone', phone }) }).then(r => r.json()),

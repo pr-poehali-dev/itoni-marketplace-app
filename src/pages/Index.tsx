@@ -229,7 +229,15 @@ export default function Index() {
   }
 
   if (!authed) {
-    return <AuthScreen onAdmin={() => setScreen({ name: 'admin-login' })} />;
+    return (
+      <AuthScreen
+        onAdmin={() => setScreen({ name: 'admin-login' })}
+        onAuthed={() => {
+          setAuthed(true);
+          setScreen({ name: 'home' });
+        }}
+      />
+    );
   }
 
   function handleAccountGone() {

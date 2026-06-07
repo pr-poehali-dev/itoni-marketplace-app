@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import secrets
 import hashlib
 import hmac
 import smtplib
@@ -49,7 +50,7 @@ def verify_magic_token(token: str):
     return data['email'], None
 
 
-def send_magic_link(to_email: str, token: str):
+def send_magic_link(to_email: str, token: str, code: str = ''):
     raw_user = (os.environ.get('SMTP_USER') or '').strip()
     # Извлекаем корректный email, даже если в секрет попали лишние символы/пробелы
     m = re.search(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', raw_user)
@@ -79,6 +80,11 @@ def send_magic_link(to_email: str, token: str):
         print(json.dumps({'event': 'magic_link_error', 'reason': 'smtp_secrets_missing', 'missing': missing}))
         return False, reason
     link = f"{APP_URL}/auth/verify?token={token}"
+    code_block = (
+        "<p style=\"color:#111;font-size:15px;margin:20px 0 6px\">Или введите код в приложении:</p>"
+        f"<div style=\"font-size:32px;font-weight:bold;letter-spacing:8px;color:#2563eb;"
+        f"background:#f1f5f9;border-radius:12px;padding:14px 0;text-align:center;margin:0 0 8px\">{code}</div>"
+    ) if code else ""
     html = (
         "<div style=\"font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px\">"
         "<h2 style=\"color:#2563eb;margin:0 0 8px\">иТони</h2>"
@@ -86,12 +92,15 @@ def send_magic_link(to_email: str, token: str):
         f"<a href=\"{link}\" style=\"display:inline-block;background:#2563eb;color:#fff;"
         "text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:12px;margin:16px 0\">"
         "Войти в иТони</a>"
-        "<p style=\"color:#666;font-size:13px\">Ссылка действует 15 минут. "
+        f"{code_block}"
+        "<p style=\"color:#666;font-size:13px\">Ссылка и код действуют 15 минут. "
         "Если вы не запрашивали вход — просто проигнорируйте это письмо.</p>"
         f"<p style=\"color:#999;font-size:12px;word-break:break-all\">{link}</p>"
         "</div>"
     )
     text = f"Войдите в иТони по ссылке (действует 15 минут):\n{link}"
+    if code:
+        text += f"\n\nИли введите код в приложении: {code}"
     msg = MIMEMultipart('alternative')
     msg['Subject'] = Header('Вход в иТони', 'utf-8')
     msg['From'] = smtp_user
@@ -243,18 +252,25 @@ def handler(event: dict, context) -> dict:
 
     USER_COLS = "id, name, phone, city, region, photo, accepted_terms, login, email, show_phone"
 
-    # POST magic_request - отправить магическую ссылку для входа на email
+    # POST magic_request - отправить ссылку и код для входа на email
     if method == 'POST' and action == 'magic_request':
         email = (body.get('email') or '').strip().lower()
         if '@' not in email or '.' not in email.split('@')[-1]:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный email'})}
+        code = f"{secrets.randbelow(1000000):06d}"
+        cur.execute("DELETE FROM itoni_login_codes WHERE email=%s OR expires_at < NOW()", (email,))
+        cur.execute(
+            "INSERT INTO itoni_login_codes (email, code, expires_at) VALUES (%s, %s, NOW() + INTERVAL '15 minutes')",
+            (email, code)
+        )
+        conn.commit()
         cur.close(); conn.close()
         token = make_magic_token(email)
-        ok, reason = send_magic_link(email, token)
+        ok, reason = send_magic_link(email, token, code)
         if not ok:
             return {'statusCode': 503, 'headers': CORS_HEADERS, 'body': json.dumps({'error': reason or 'Отправка письма временно недоступна. Попробуйте позже.'})}
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': f'Ссылка для входа отправлена на {email}'})}
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'success': True, 'message': f'Ссылка и код для входа отправлены на {email}'})}
 
     # POST magic_verify - проверить токен из ссылки и войти/создать пользователя
     if method == 'POST' and action == 'magic_verify':
@@ -266,6 +282,42 @@ def handler(event: dict, context) -> dict:
         if err:
             cur.close(); conn.close()
             return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': err})}
+
+        cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE LOWER(email)=LOWER(%s)", (email,))
+        user = cur.fetchone()
+        is_new = False
+        if not user:
+            cur.execute(
+                "INSERT INTO itoni_users (email, name) VALUES (%s, %s) RETURNING " + USER_COLS,
+                (email, email.split('@')[0])
+            )
+            user = cur.fetchone()
+            is_new = True
+        conn.commit()
+        cur.close(); conn.close()
+        needs_phone = not (user[2] or '').strip()
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({
+            'success': True, 'is_new': is_new, 'needs_phone': needs_phone,
+            'accepted_terms': bool(user[6]), 'user': user_payload(user)
+        })}
+
+    # POST magic_verify_code - вход по 6-значному коду из письма
+    if method == 'POST' and action == 'magic_verify_code':
+        email = (body.get('email') or '').strip().lower()
+        code = ''.join(ch for ch in (body.get('code') or '') if ch.isdigit())
+        if '@' not in email or len(code) != 6:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите код из 6 цифр'})}
+
+        cur.execute(
+            "SELECT id FROM itoni_login_codes WHERE email=%s AND code=%s AND expires_at > NOW() ORDER BY id DESC LIMIT 1",
+            (email, code)
+        )
+        match = cur.fetchone()
+        if not match:
+            cur.close(); conn.close()
+            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный или устаревший код'})}
+        cur.execute("DELETE FROM itoni_login_codes WHERE email=%s", (email,))
 
         cur.execute("SELECT " + USER_COLS + " FROM itoni_users WHERE LOWER(email)=LOWER(%s)", (email,))
         user = cur.fetchone()

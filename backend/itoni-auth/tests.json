@@ -37,6 +37,24 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Magic verify code invalid length",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "magic_verify_code", "email": "user@mail.ru", "code": "123"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Magic verify code wrong code",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "magic_verify_code", "email": "nobody@mail.ru", "code": "000000"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Magic request real send (diagnostic)",
       "method": "POST",
       "path": "/",
