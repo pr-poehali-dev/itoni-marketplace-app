@@ -89,6 +89,14 @@ export default function PhoneEntryScreen({ onDone }: Props) {
         >
           {loading ? 'Сохраняем...' : 'Продолжить'}
         </button>
+
+        <button
+          onClick={() => onDone(false)}
+          disabled={loading}
+          className="w-full font-semibold py-4 text-base text-gray-500 active:text-gray-700 transition-colors"
+        >
+          Пропустить
+        </button>
       </div>
     </div>
   );
