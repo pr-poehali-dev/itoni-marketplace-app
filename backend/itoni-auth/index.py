@@ -297,6 +297,14 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите корректный номер телефона'})}
 
         cur.execute(
+            "SELECT id FROM itoni_users WHERE phone=%s AND id<>%s",
+            (phone, int(user_id))
+        )
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Этот номер уже используется другим аккаунтом'})}
+
+        cur.execute(
             "UPDATE itoni_users SET phone=%s WHERE id=%s RETURNING " + USER_COLS,
             (phone, int(user_id))
         )
