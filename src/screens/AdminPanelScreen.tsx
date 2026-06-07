@@ -115,6 +115,8 @@ function UsersTab() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   function load(s = '') {
     setLoading(true);
@@ -125,6 +127,14 @@ function UsersTab() {
   async function toggleBlock(u: AdminUser) {
     await adminApi.blockUser(u.id, !u.is_blocked);
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_blocked: !x.is_blocked } : x));
+  }
+
+  async function deleteUser(u: AdminUser) {
+    setDeletingId(u.id);
+    await adminApi.deleteUser(u.id);
+    setUsers(prev => prev.filter(x => x.id !== u.id));
+    setDeletingId(null);
+    setConfirmId(null);
   }
 
   return (
@@ -153,12 +163,38 @@ function UsersTab() {
               <p className="text-xs text-gray-500">{u.phone}{u.city ? ` · ${u.city}` : ''}</p>
               <p className={`text-[11px] ${u.online ? 'text-green-600 font-medium' : 'text-gray-400'}`}>{u.online ? 'Онлайн' : 'Не в сети'}</p>
             </div>
-            <button
-              onClick={() => toggleBlock(u)}
-              className={`text-xs font-semibold px-3 py-2 rounded-xl ${u.is_blocked ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}
-            >
-              {u.is_blocked ? 'Разблок.' : 'Блок'}
-            </button>
+            {confirmId === u.id ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => deleteUser(u)}
+                  disabled={deletingId === u.id}
+                  className="text-xs font-semibold px-3 py-2 rounded-xl bg-red-500 text-white disabled:opacity-60"
+                >
+                  {deletingId === u.id ? '...' : 'Точно'}
+                </button>
+                <button
+                  onClick={() => setConfirmId(null)}
+                  className="text-xs font-semibold px-3 py-2 rounded-xl bg-gray-100 text-gray-600"
+                >
+                  Отмена
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => toggleBlock(u)}
+                  className={`text-xs font-semibold px-3 py-2 rounded-xl ${u.is_blocked ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}
+                >
+                  {u.is_blocked ? 'Разблок.' : 'Блок'}
+                </button>
+                <button
+                  onClick={() => setConfirmId(u.id)}
+                  className="text-xs font-semibold px-3 py-2 rounded-xl bg-gray-100 text-gray-600"
+                >
+                  Удалить
+                </button>
+              </div>
+            )}
           </div>
         ))
       )}

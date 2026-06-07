@@ -204,6 +204,23 @@ def handle_admin(action, event, body, conn, cur):
         conn.commit()
         return _resp(200, {'success': True})
 
+    if action == 'admin_delete_user':
+        uid = int(body.get('user_id'))
+        cur.execute("SELECT email, phone FROM itoni_users WHERE id=%s", (uid,))
+        urow = cur.fetchone()
+        if not urow:
+            return _resp(404, {'error': 'Пользователь не найден'})
+        cur.execute("DELETE FROM itoni_messages WHERE sender_id=%s OR receiver_id=%s", (uid, uid))
+        cur.execute("DELETE FROM itoni_notifications WHERE user_id=%s OR sender_id=%s", (uid, uid))
+        cur.execute("DELETE FROM itoni_favorites WHERE user_id=%s", (uid,))
+        cur.execute("DELETE FROM itoni_listings WHERE user_id=%s", (uid,))
+        if urow[0]:
+            cur.execute("DELETE FROM itoni_login_codes WHERE LOWER(email)=LOWER(%s)", (urow[0],))
+        cur.execute("DELETE FROM itoni_users WHERE id=%s", (uid,))
+        _log(cur, f'Удалил пользователя #{uid}')
+        conn.commit()
+        return _resp(200, {'success': True})
+
     # ── РАЗДЕЛ 2. ОБЪЯВЛЕНИЯ ──
     if action == 'admin_listings':
         category = body.get('category')

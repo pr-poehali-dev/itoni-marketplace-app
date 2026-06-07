@@ -37,6 +37,15 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Admin delete user without token",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "admin_delete_user", "user_id": 999999},
+      "expectedStatus": 403,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Magic verify code invalid length",
       "method": "POST",
       "path": "/",

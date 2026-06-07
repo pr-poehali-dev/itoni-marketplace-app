@@ -35,6 +35,7 @@ export const adminApi = {
   stats: () => call('admin_stats'),
   users: (search = '') => call('admin_users', { search }),
   blockUser: (user_id: number, blocked: boolean) => call('admin_block_user', { user_id, blocked }),
+  deleteUser: (user_id: number) => call('admin_delete_user', { user_id }),
 
   listings: (category = '', status = '') => call('admin_listings', { category, status }),
   deleteListings: (ids: number[]) => call('admin_delete_listings', { ids }),
