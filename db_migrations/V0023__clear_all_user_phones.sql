@@ -1,0 +1,1 @@
+UPDATE itoni_users SET phone = '';
